@@ -36,10 +36,15 @@ transkribiert lokal mit Whisper und fügt den Text dort ein, wo der Cursor steht
 - Laufende Instanz für ein Update beenden: Menü „Beenden“ (Exit 0, der Wächter endet mit), oder alle python-Prozesse
   hart beenden, deren Befehlszeile `diktat`, `start.pyw` oder `multiprocessing-fork` enthält.
 - `config.toml`: Shortcut, Stufen (Modell + Gerät), Einfügemodus. `fachwoerter.txt`: initial_prompt.
-- `tests/`: `test_kern`, `test_phase2 [--engine]`, `test_phase3` (jeweils `python -m tests.<name>`), ohne echte
+- `tests/`: `test_kern`, `test_phase2 [--engine]`, `test_phase3`, `test_phase4 [--engine]` (jeweils `python -m tests.<name>`), ohne echte
   Tastatureingaben. Außerdem `mikro_probe` (Stille-Messung am Mikrofon). Achtung: test_phase3 schreibt in `logs/waechter.log`.
 - `whisper-test/`: frühere Experimente und Benchmarks.
 - Keine echten Tastatureingaben (SendInput) in automatischen Tests: Sie landen im aktiven Fenster des Nutzers.
+
+## Versionsstand (Git)
+- `main` = stabiler Stand. Tag `v0.3` = Phase 1–3 fertig. Neue Arbeit auf eigenen Branches, erst nach dem Praxistest mergen.
+- Nicht in Git: `.ov_cache/`, `logs/`, `aufnahmen/`, `*.wav` (Sprachaufnahmen bleiben lokal).
+- Zurückgehen: `git switch main` (oder `git checkout v0.3`), danach das Tool neu starten (siehe oben).
 
 ## Fallstricke
 - Die Claude-App leitet Schreibzugriffe auf `AppData\Roaming` in einen privaten Bereich um. Ein Python, das dort

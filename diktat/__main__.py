@@ -21,7 +21,8 @@ import numpy as np
 
 from . import PROJEKT, autostart
 from .waechter import EXIT_LAEUFT_SCHON, EXIT_NEUSTART, EXIT_OK
-from .config import CONFIG_DATEI, FACHWORT_DATEI, fachwort_prompt, lade_config, speichere_stufe
+from .config import (CONFIG_DATEI, FACHWORT_DATEI, fachwort_prompt, lade_config, speichere_modus,
+                     speichere_stufe)
 from .engine import Engine
 from .hotkey import PushToTalk
 from .inserter import fuege_ein
@@ -104,8 +105,14 @@ class App:
         self.ereignisse: queue.Queue = queue.Queue()
         self.auftraege: queue.Queue = queue.Queue()
         self.hotkey = PushToTalk(self.cfg.shortcut, self.ereignisse.put_nowait)
+        self.modus = self.cfg.modus
         self.tray = Tray(self, self.cfg.shortcut)
-        self._start_zeit = 0.0
+        self._start_zeit = 0.0          # Beginn der laufenden Aufnahme
+        self._druck_zeit = 0.0          # Zeitpunkt des letzten Tastendrucks
+        self._dauer_aktiv = False       # Daueraufnahme (Umschalten) läuft
+        self._release_ignorieren = False  # das Loslassen nach dem Stopp-Tippen gehört zu nichts
+        self._entladen = False          # Modell wegen Leerlauf entladen
+        self._letzte_aktivitaet = time.monotonic()
         self._laeuft = True
 
     # --- Modell / Stufe --------------------------------------------------------------------
@@ -123,7 +130,7 @@ class App:
             if engine is not self.engine or self.pausiert or not self._laeuft:
                 engine.stop()
                 return
-            self.tray.setze("laedt", hinweis or f"Lade {STUFEN_TEXT.get(self.stufe, self.stufe)} …")
+            self._zeige_laden(hinweis or f"Lade {STUFEN_TEXT.get(self.stufe, self.stufe)} …")
             try:
                 engine.start()
                 break
@@ -134,12 +141,45 @@ class App:
                 if versuch == versuche:
                     self.tray.setze("fehler", f"Modell: {e}"[:100])
                     return
-                self.tray.setze("laedt", f"Laden fehlgeschlagen, neuer Versuch in {10 * versuch} s")
+                self._zeige_laden(f"Laden fehlgeschlagen, neuer Versuch in {10 * versuch} s")
                 time.sleep(10 * versuch)
         if engine is not self.engine or self.pausiert:
             engine.stop()
             return
         self._zurueck_zu_bereit(detail=f"{STUFEN_TEXT.get(self.stufe, self.stufe)} geladen")
+
+    def _zeige_laden(self, detail: str):
+        """Lade-Hinweis zeigen, ohne das rote Aufnahme-Symbol zu überdecken (Laden nach Leerlauf läuft,
+        während schon gesprochen wird)."""
+        if self.recorder.laeuft or self.tray.zustand == "verarbeitet":
+            self.tray.detail = detail
+        else:
+            self.tray.setze("laedt", detail)
+
+    # --- Leerlauf: Modell entladen und beim nächsten Diktat wieder laden ------------------------
+    def _pruefe_leerlauf(self, jetzt: float) -> bool:
+        """True, wenn das Modell jetzt wegen Leerlauf entladen wurde."""
+        if self.cfg.leerlauf_minuten <= 0 or self.pausiert or self._entladen:
+            return False
+        if self.recorder.laeuft or not self.auftraege.empty() or not self.engine.bereit:
+            return False
+        if jetzt - self._letzte_aktivitaet < self.cfg.leerlauf_minuten * 60:
+            return False
+        log.info("Seit %.0f min kein Diktat – entlade das Modell", (jetzt - self._letzte_aktivitaet) / 60)
+        self._entladen = True
+        with self._engine_lock:
+            alt = self.engine
+            self.engine = self._neue_engine(self.stufe)
+        threading.Thread(target=alt.stop, name="stoppen", daemon=True).start()
+        self.tray.setze("ruht", "Modell entladen (Leerlauf) – lädt beim nächsten Diktat")
+        return True
+
+    def _aufwecken(self):
+        if not self._entladen or self.pausiert:
+            return
+        self._entladen = False
+        log.info("Diktat nach Leerlauf – lade das Modell")
+        self._starte_engine()
 
     def _engine_neu_starten(self, grund: str, warten: bool = False):
         log.warning("Starte Whisper neu: %s", grund)
@@ -167,6 +207,8 @@ class App:
             self.engine = self._neue_engine(name)
         threading.Thread(target=alt.stop, name="stoppen", daemon=True).start()
         self.hotkey.erneuern()
+        self._entladen = False
+        self._letzte_aktivitaet = time.monotonic()
         try:
             speichere_stufe(name)
         except Exception:  # noqa: BLE001
@@ -176,10 +218,29 @@ class App:
         else:
             self.tray.setze("pausiert")
 
+    def waehle_modus(self, modus: str):
+        if modus == self.modus:
+            return
+        log.info("Bedienung: %s -> %s", self.modus, modus)
+        self.modus = modus
+        try:
+            speichere_modus(modus)
+        except Exception:  # noqa: BLE001
+            log.exception("Modus konnte nicht in config.toml gespeichert werden")
+        self.tray.setze(self.tray.zustand)
+
+    def bedien_hinweis(self) -> str:
+        k = self.cfg.shortcut.upper()
+        return {"halten": f"{k} halten zum Diktieren",
+                "umschalten": f"{k} tippen = Start/Stopp",
+                "beides": f"{k} halten oder kurz tippen"}[self.modus]
+
     def umschalten_pause(self):
         if self.pausiert:
             log.info("Fortsetzen")
             self.pausiert = False
+            self._entladen = False
+            self._letzte_aktivitaet = time.monotonic()
             self.hotkey.eingeschaltet = True
             self.hotkey.erneuern()
             with self._engine_lock:
@@ -191,6 +252,9 @@ class App:
             self.hotkey.eingeschaltet = False
             self.hotkey.aktiv = False
             self.hotkey._vom_wachhund = False  # noqa: SLF001
+            self._dauer_aktiv = False
+            self._release_ignorieren = False
+            self._entladen = False
             if self.recorder.laeuft:
                 self.recorder.stop()
             self.engine.stop()
@@ -245,7 +309,7 @@ class App:
                     self.hotkey.erneuern()
                     if untaetig:
                         self.recorder.geraete_neu_laden()
-                    if not self.pausiert:
+                    if not self.pausiert and not self._entladen:
                         self._engine_neu_starten("nach Standby")
                     letzte_hook = letzte_geraete = jetzt
                 letzte_wand = jetzt_wand
@@ -260,6 +324,7 @@ class App:
                             geraet = neu
                     letzte_geraete = jetzt
                 self.recorder.gesund()
+                self._pruefe_leerlauf(jetzt)
                 e = self.engine
                 if e.bereit and e._proc is not None and not e._proc.is_alive():  # noqa: SLF001
                     self._engine_neu_starten("Whisper-Prozess unerwartet beendet")
@@ -273,32 +338,71 @@ class App:
             try:
                 e = self.ereignisse.get(timeout=0.5)
             except queue.Empty:
-                continue
-            if self.pausiert:
-                continue
+                e = None
             try:
-                if e == "press":
-                    self._start_zeit = time.monotonic()
-                    self.recorder.start()
-                    self.tray.setze("aufnahme")
-                elif e in ("release", "cancel"):
-                    audio = self.recorder.stop()
-                    dauer = time.monotonic() - self._start_zeit
-                    if e == "cancel" or dauer < self.cfg.min_dauer_s:
-                        log.info("Aufnahme verworfen (%s, %.2f s)", e, dauer)
-                        self._zurueck_zu_bereit()
-                    else:
-                        self.auftraege.put(audio)
-                        self.tray.setze("verarbeitet")
+                if e is None:
+                    self._pruefe_max_dauer(time.monotonic())
+                elif not self.pausiert:
+                    self._behandle_ereignis(e, time.monotonic())
             except Exception as ex:  # noqa: BLE001
                 log.exception("Fehler bei %s", e)
                 self.tray.setze("fehler", f"Mikrofon: {ex}"[:100])
+
+    def _behandle_ereignis(self, e: str, jetzt: float):
+        """Bedienlogik für press/release/cancel je nach Modus (halten, umschalten, beides)."""
+        if e == "press":
+            self._letzte_aktivitaet = jetzt
+            if self._dauer_aktiv:  # Tippen während einer Daueraufnahme = Stopp
+                self._dauer_aktiv = False
+                self._release_ignorieren = True
+                self._abschliessen(jetzt)
+                return
+            self._druck_zeit = self._start_zeit = jetzt
+            self.recorder.start()
+            self.tray.setze("aufnahme", "")
+            self._aufwecken()  # nach Leerlauf: Modell lädt, während gesprochen wird
+        elif e == "release":
+            if self._release_ignorieren:
+                self._release_ignorieren = False
+                return
+            if not self.recorder.laeuft:
+                return
+            gedrueckt = jetzt - self._druck_zeit
+            if self.modus == "umschalten" or (self.modus == "beides" and gedrueckt < self.cfg.tipp_grenze_s):
+                self._dauer_aktiv = True
+                log.info("Daueraufnahme läuft – %s tippen zum Beenden", self.cfg.shortcut)
+                self.tray.setze("aufnahme", f"Daueraufnahme – {self.cfg.shortcut.upper()} tippen zum Beenden")
+                return
+            self._abschliessen(jetzt)
+        elif e == "cancel":
+            self._dauer_aktiv = self._release_ignorieren = False
+            self.recorder.stop()
+            log.info("Aufnahme abgebrochen (andere Taste gedrückt)")
+            self._zurueck_zu_bereit()
+
+    def _abschliessen(self, jetzt: float):
+        audio = self.recorder.stop()
+        dauer = jetzt - self._start_zeit
+        if dauer < self.cfg.min_dauer_s:
+            log.info("Aufnahme verworfen (%.2f s)", dauer)
+            self._zurueck_zu_bereit()
+            return
+        self.auftraege.put(audio)
+        self.tray.setze("verarbeitet")
+
+    def _pruefe_max_dauer(self, jetzt: float):
+        if self._dauer_aktiv and jetzt - self._start_zeit >= self.cfg.max_aufnahme_s:
+            log.info("Daueraufnahme nach %.0f s automatisch beendet", jetzt - self._start_zeit)
+            self._dauer_aktiv = False
+            self._abschliessen(jetzt)
 
     def _zurueck_zu_bereit(self, detail: str | None = None):
         if self.pausiert:
             self.tray.setze("pausiert")
         elif self.recorder.laeuft:
             return
+        elif self._entladen and not self.engine.bereit:
+            self.tray.setze("ruht", detail)
         elif not self.engine.bereit:
             if self.tray.zustand != "fehler":
                 self.tray.setze("laedt", detail)
@@ -317,6 +421,8 @@ class App:
                 log.exception("Transkription fehlgeschlagen")
                 self.tray.setze("fehler", str(ex)[:100])
                 continue
+            finally:
+                self._letzte_aktivitaet = time.monotonic()
             self._zurueck_zu_bereit()
 
     def _verarbeite(self, audio: np.ndarray):
@@ -329,7 +435,8 @@ class App:
                      "Headset wacht gerade auf?", dauer, spitze, self.recorder.geraet)
             self.tray.detail = "Aufnahme war stumm – nochmal versuchen / Mikrofon prüfen"
             return
-        # Falls das Modell noch lädt (Start, Stufenwechsel): warten statt verwerfen
+        self._aufwecken()  # Sicherheitsnetz, falls das Modell im Leerlauf entladen ist
+        # Falls das Modell noch lädt (Start, Stufenwechsel, Leerlauf): warten statt verwerfen
         ende = time.monotonic() + 600
         while not self.engine.bereit and time.monotonic() < ende:
             if self.pausiert or self.tray.zustand == "fehler":
@@ -393,8 +500,8 @@ class App:
                            (self._transkriptions_schleife, "transkription"),
                            (self._wartungs_schleife, "wartung")):
             threading.Thread(target=ziel, name=name, daemon=True).start()
-        log.info("Bereit: %s gedrückt halten zum Diktieren (Stufe %s%s)", self.cfg.shortcut, self.stufe,
-                 ", mit Wächter" if self.unter_waechter else "")
+        log.info("Bereit: %s (Bedienung %s, Stufe %s, Leerlauf %s min%s)", self.bedien_hinweis(), self.modus,
+                 self.stufe, self.cfg.leerlauf_minuten or "aus", ", mit Wächter" if self.unter_waechter else "")
 
     def beenden(self):
         log.info("Beende …" if self.exit_code != EXIT_NEUSTART else "Neustart …")

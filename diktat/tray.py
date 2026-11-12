@@ -8,6 +8,7 @@ FARBEN = {
     "aufnahme": ((220, 40, 40), "Aufnahme läuft"),
     "verarbeitet": ((235, 170, 20), "transkribiert …"),
     "pausiert": ((190, 190, 190), "pausiert"),
+    "ruht": ((175, 175, 175), "ruht (Modell entladen)"),
     "fehler": ((40, 40, 40), "Fehler – siehe Log"),
 }
 
@@ -31,7 +32,17 @@ def _bild(zustand) -> Image.Image:
     d.line((24, 52, 40, 52), fill=weiss, width=4)
     if zustand == "pausiert":
         d.line((12, 52, 52, 12), fill=(200, 30, 30), width=7)
+    if zustand == "ruht":  # kleiner blauer Mond: schläft, wacht beim nächsten Diktat auf
+        d.ellipse((40, 2, 62, 24), fill=(70, 130, 230))
+        d.ellipse((47, 0, 66, 19), fill=(0, 0, 0, 0))
     return img
+
+
+MODUS_TEXT = {
+    "halten": "Halten – sprechen, solange gedrückt",
+    "umschalten": "Umschalten – tippen = Start/Stopp",
+    "beides": "Beides – halten oder kurz tippen",
+}
 
 
 class Tray:
@@ -57,15 +68,25 @@ class Tray:
             )
         return pystray.Menu(*[eintrag(n) for n in self.a.stufen])
 
+    def _modus_menue(self):
+        def eintrag(modus):
+            return pystray.MenuItem(
+                MODUS_TEXT[modus],
+                lambda icon, item: self.a.waehle_modus(modus),
+                checked=lambda item: self.a.modus == modus,
+                radio=True,
+            )
+        return pystray.Menu(*[eintrag(m) for m in MODUS_TEXT])
+
     def _menue(self):
         return pystray.Menu(
             pystray.MenuItem(lambda _: f"Status: {FARBEN[self.zustand][1]}", None, enabled=False),
-            pystray.MenuItem(lambda _: self.detail or f"{self.shortcut.upper()} halten zum Diktieren",
-                             None, enabled=False),
+            pystray.MenuItem(lambda _: self.detail or self.a.bedien_hinweis(), None, enabled=False),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(lambda _: "Fortsetzen" if self.a.pausiert else "Pausieren",
                              lambda icon, item: self.a.umschalten_pause()),
             pystray.MenuItem("Stufe", self._stufen_menue()),
+            pystray.MenuItem("Bedienung", self._modus_menue()),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Fachwörter bearbeiten …", lambda icon, item: self.a.oeffne_fachwoerter()),
             pystray.MenuItem("Einstellungen öffnen …", lambda icon, item: self.a.oeffne_einstellungen()),
