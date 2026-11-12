@@ -1,0 +1,9 @@
+# Kompilier-Cache von OpenVINO (mehrere GB, wird automatisch neu erzeugt)
+.ov_cache/
+# Laufzeitdaten
+logs/
+aufnahmen/
+__pycache__/
+*.pyc
+# Audio (Sprachaufnahmen bleiben lokal, nicht in die Versionskontrolle)
+*.wav
