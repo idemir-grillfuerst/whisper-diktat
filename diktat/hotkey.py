@@ -56,7 +56,11 @@ MODIFIER = {
 VK_ZU_GRUPPE = {vk: g for g, vks in MODIFIER.items() for vk in vks}
 ALIASE = {"strg": "ctrl", "control": "ctrl", "umschalt": "shift", "menu": "alt"}
 SONDERTASTEN = {"space": 0x20, "leertaste": 0x20, "enter": 0x0D, "tab": 0x09, "esc": 0x1B,
-                "pause": 0x13, "insert": 0x2D, "einfg": 0x2D, "capslock": 0x14}
+                "pause": 0x13, "insert": 0x2D, "einfg": 0x2D, "capslock": 0x14,
+                # für Sprachbefehle (befehle.toml)
+                "backspace": 0x08, "delete": 0x2E, "entf": 0x2E, "left": 0x25, "up": 0x26, "right": 0x27,
+                "down": 0x28, "home": 0x24, "pos1": 0x24, "end": 0x23, "ende": 0x23, "pageup": 0x21,
+                "pagedown": 0x22, ".": 0xBE}
 
 
 def parse_shortcut(text: str) -> tuple[frozenset, int | None]:
