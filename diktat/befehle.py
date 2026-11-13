@@ -7,7 +7,9 @@ import logging
 import re
 import tomllib
 from dataclasses import dataclass, field
+from pathlib import Path
 
+from .config import BEFEHLE_DATEI, aus_vorlage
 from .hotkey import parse_shortcut
 
 log = logging.getLogger("diktat")
@@ -87,6 +89,32 @@ def parse_befehle(toml_text: str) -> Befehle:
                 for satz in _namen(schluessel):
                     neu(satz, Aktion("taste", ziel))
     return Befehle(saetze)
+
+
+_CACHE: dict[Path, tuple[float, Befehle]] = {}
+
+
+def lade_befehle(datei: Path | None = None) -> Befehle:
+    """befehle.toml lesen (beim ersten Mal aus der Vorlage anlegen). Neu gelesen wird nur nach einer Änderung.
+    Fehler legen nichts lahm: Dann gibt es keine Befehle und `fehler` sagt, was los ist."""
+    if datei is None:
+        datei = BEFEHLE_DATEI
+        aus_vorlage(datei)
+    try:
+        mtime = datei.stat().st_mtime
+    except OSError:
+        return Befehle({})
+    alt = _CACHE.get(datei)
+    if alt and alt[0] == mtime:
+        return alt[1]
+    try:
+        befehle = parse_befehle(datei.read_text(encoding="utf-8"))
+        log.info("%s geladen: %d Sätze", datei.name, len(befehle.saetze))
+    except (ValueError, OSError) as e:
+        befehle = Befehle({}, fehler=f"{datei.name}: {e}"[:200])
+        log.warning("Sprachbefehle aus – %s", befehle.fehler)
+    _CACHE[datei] = (mtime, befehle)
+    return befehle
 
 
 def zerlege(text: str, befehle: Befehle, enter_woerter: list[str]) -> Ergebnis:

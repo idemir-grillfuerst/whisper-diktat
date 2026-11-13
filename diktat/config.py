@@ -12,9 +12,11 @@ from . import PROJEKT
 
 CONFIG_DATEI = PROJEKT / "config.toml"
 FACHWORT_DATEI = PROJEKT / "fachwoerter.txt"
+BEFEHLE_DATEI = PROJEKT / "befehle.toml"
 VORLAGEN = {
     CONFIG_DATEI: PROJEKT / "config.beispiel.toml",
     FACHWORT_DATEI: PROJEKT / "fachwoerter.beispiel.txt",
+    BEFEHLE_DATEI: PROJEKT / "befehle.beispiel.toml",
 }
 
 
@@ -71,6 +73,7 @@ class Config:
     modell: str                # Schlüssel in modelle
     geraet: str                # "auto", "GPU", "NPU", "CPU", "GPU.0" …
     modelle: dict
+    enter_woerter: list        # Diktat endet auf eines davon -> Wort weg, danach Enter ([] = aus)
 
 
 def lade_config(datei=None) -> Config:
@@ -115,6 +118,7 @@ def lade_config(datei=None) -> Config:
         modell=modell,
         geraet=str(geraet),
         modelle=modelle,
+        enter_woerter=[str(w) for w in raw.get("befehle", {}).get("enter", ["enter"])],
     )
 
 

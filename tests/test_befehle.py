@@ -3,9 +3,15 @@
 Aufruf (im Projektordner):
     %USERPROFILE%\\.venvs\\whisper\\Scripts\\python.exe -m tests.test_befehle
 """
+import os
 import sys
+import tempfile
+import time
+from pathlib import Path
 
-from diktat.befehle import Aktion, Befehle, Ergebnis, normalisiere, parse_befehle, zerlege
+from diktat import PROJEKT
+from diktat.befehle import Aktion, Befehle, Ergebnis, lade_befehle, normalisiere, parse_befehle, zerlege
+from diktat.config import lade_config
 
 FEHLER = []
 
@@ -64,9 +70,45 @@ def test_zerlege():
     pruefe("Wort, das nur mit enter endet", zerlege("Das ist ein Center", b, E).aktionen == [])
 
 
+def test_laden(tmp):
+    d = tmp / "befehle.toml"
+    d.write_text('[tasten]\n"rückgängig" = "ctrl+z"\n', encoding="utf-8")
+    pruefe("geladen", "rückgängig" in lade_befehle(d).saetze)
+    d.write_text('[tasten\n', encoding="utf-8")
+    os.utime(d, (time.time() + 5,) * 2)
+    b = lade_befehle(d)
+    pruefe("kaputt: leer + Fehler", b.saetze == {} and "befehle.toml" in (b.fehler or ""))
+    d.write_text('[tasten]\n"kopieren" = "ctrl+c"\n', encoding="utf-8")
+    os.utime(d, (time.time() + 10,) * 2)
+    pruefe("repariert: neu geladen", "kopieren" in lade_befehle(d).saetze)
+    pruefe("fehlende Datei: leer, kein Absturz", lade_befehle(tmp / "gibtsnicht.toml").saetze == {})
+
+
+def test_vorlage():
+    b = parse_befehle((PROJEKT / "befehle.beispiel.toml").read_text(encoding="utf-8"))
+    pruefe("Vorlage gültig", b.fehler is None)
+    pruefe("Outlook im Browser", b.saetze["öffne outlook"].ziel.startswith("https://outlook."))
+    pruefe("rückgängig", b.saetze["rückgängig"] == Aktion("taste", "ctrl+z"))
+    pruefe("Emoji-Taste win+.", b.saetze["emoji"] == Aktion("taste", "win+."))
+
+
+def test_config_enter(tmp):
+    c = tmp / "config.toml"
+    c.write_text((PROJEKT / "config.beispiel.toml").read_text(encoding="utf-8"), encoding="utf-8")
+    pruefe("enter Standard", lade_config(c).enter_woerter == ["enter"])
+    c.write_text('[modell]\nname = "turbo"\n', encoding="utf-8")
+    pruefe("alte Datei ohne [befehle]", lade_config(c).enter_woerter == ["enter"])
+    c.write_text('[befehle]\nenter = []\n', encoding="utf-8")
+    pruefe("enter aus", lade_config(c).enter_woerter == [])
+
+
 if __name__ == "__main__":
     test_normalisiere()
     test_parse()
     test_zerlege()
+    with tempfile.TemporaryDirectory() as t:
+        test_laden(Path(t))
+        test_config_enter(Path(t))
+    test_vorlage()
     print(f"\n{len(FEHLER)} Fehler" + (": " + ", ".join(FEHLER) if FEHLER else ""))
     sys.exit(1 if FEHLER else 0)

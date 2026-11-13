@@ -1,0 +1,67 @@
+# Sprachbefehle für whisper-diktat. Vorlage: Beim ersten Start wird daraus befehle.toml (deine persönliche Kopie,
+# nicht in Git). Änderungen greifen beim nächsten Diktat, ohne Neustart. Menü: „Befehle bearbeiten …“
+#
+# Ein Befehl löst nur aus, wenn das GANZE Diktat genau so ein Satz ist. „Bitte mach das rückgängig“ bleibt Text.
+# Groß-/Kleinschreibung und Satzzeichen sind egal. Mehrere Schreibweisen mit | trennen.
+#
+# [oeffnen]  Name = Webadresse, Programm oder Ordner (shell:Downloads …). Webadressen öffnen im Standardbrowser.
+#            Jeder Name funktioniert in diesen Sätzen: „öffne X“, „X öffnen“, „öffne mal X“, „mach X auf“,
+#            „X aufmachen“, „starte X“, „X starten“, „geh zu X“, „zeig X“, „zeig mir X“.
+# [tasten]   Satz = Tasten wie beim Shortcut (ctrl, shift, alt, win, a–z, 0–9, f1–f12, enter, esc, tab, space,
+#            backspace, entf, left, right, up, down, home, end, pageup, pagedown, .).
+#            Mehrere Kombinationen nacheinander mit Leerzeichen: "shift+enter shift+enter".
+#
+# Außerdem: Endet ein Diktat auf „Enter“, wird danach die Enter-Taste gedrückt (config.toml, [befehle] enter).
+
+[oeffnen]
+"outlook|mails|e-mails|posteingang" = "https://outlook.office.com/mail/"
+"kalender|outlook kalender"         = "https://outlook.office.com/calendar/"
+"teams"                             = "https://teams.microsoft.com/"
+"onedrive"                          = "https://onedrive.live.com/"
+"office|microsoft 365"              = "https://www.microsoft365.com/"
+"claude"                            = "https://claude.ai/"
+"chatgpt|chat gpt"                  = "https://chatgpt.com/"
+"google"                            = "https://www.google.de/"
+"google maps|maps|karte"            = "https://maps.google.de/"
+"youtube"                           = "https://www.youtube.com/"
+"github"                            = "https://github.com/"
+"whatsapp"                          = "https://web.whatsapp.com/"
+"übersetzer|deepl"                  = "https://www.deepl.com/translator"
+"rechner|taschenrechner"            = "calc.exe"
+"editor|notepad"                    = "notepad.exe"
+"explorer|dateien"                  = "explorer.exe"
+"downloads"                         = "shell:Downloads"
+"dokumente"                         = "shell:Personal"
+"desktop ordner"                    = "shell:Desktop"
+"einstellungen"                     = "ms-settings:"
+"task manager"                      = "taskmgr.exe"
+
+[tasten]
+"rückgängig|mach das rückgängig"    = "ctrl+z"
+"wiederholen"                       = "ctrl+y"
+"alles markieren|alles auswählen"   = "ctrl+a"
+"kopieren|kopier das"               = "ctrl+c"
+"einfügen|füg das ein"              = "ctrl+v"
+"ausschneiden"                      = "ctrl+x"
+"speichern|speicher das"            = "ctrl+s"
+"suchen"                            = "ctrl+f"
+"neuer tab"                         = "ctrl+t"
+"tab schließen"                     = "ctrl+w"
+"letzten tab wieder öffnen"         = "ctrl+shift+t"
+"neu laden|aktualisieren"           = "f5"
+"zurück"                            = "alt+left"
+"vor|vorwärts"                      = "alt+right"
+"fenster schließen"                 = "alt+f4"
+"fenster wechseln"                  = "alt+tab"
+"desktop anzeigen|alles minimieren" = "win+d"
+"screenshot|bildschirmfoto"         = "win+shift+s"
+"zwischenablage"                    = "win+v"
+"emoji|emojis"                      = "win+."
+"abbrechen|escape"                  = "esc"
+"tab"                               = "tab"
+"neue zeile"                        = "shift+enter"
+"neuer absatz"                      = "shift+enter shift+enter"
+"wort löschen|lösch das wort"       = "ctrl+backspace"
+"zeile löschen"                     = "home shift+end backspace"
+"nach oben|ganz nach oben"          = "ctrl+home"
+"nach unten|ganz nach unten"        = "ctrl+end"

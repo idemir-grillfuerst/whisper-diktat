@@ -51,3 +51,9 @@ repo = "OpenVINO/whisper-large-v3-turbo-int8-ov"
 [modelle.large-v3]
 titel = "Large-v3 – genau"
 repo = "OpenVINO/whisper-large-v3-int8-ov"
+
+[befehle]
+# Endet ein Diktat auf eines dieser Wörter, wird es entfernt und danach Enter gedrückt ([] = aus).
+# Schreibt Whisper das Wort bei dir anders (z. B. "Enta"), die Variante hier ergänzen.
+enter = ["enter"]
+# Feste Sprachbefehle (Programme/Seiten öffnen, Tastenkürzel) stehen in befehle.toml (Menü „Befehle bearbeiten …“).
