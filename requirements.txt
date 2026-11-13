@@ -1,0 +1,11 @@
+# Laufzeit von whisper-diktat (Python 3.12, Windows)
+openvino-genai==2026.4.1.0   # Whisper auf Intel-GPU, NPU oder CPU
+huggingface_hub              # lädt das Modell beim ersten Start
+numpy
+sounddevice                  # Mikrofon
+pystray                      # Symbol in der Taskleiste
+pillow
+
+# Nur für Tests und Benchmarks (tests/, whisper-test/)
+faster-whisper==1.2.1
+av<16                        # av 16+ entfernt metadata_errors, das faster-whisper 1.2.1 nutzt
