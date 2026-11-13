@@ -1,5 +1,4 @@
 """Reiter „Allgemein“: Tastenkombination, Bedienung, Maus, Einfügen, Absenden-Wörter, Autostart, Erweitert."""
-import threading
 import tkinter as tk
 from tkinter import ttk
 
@@ -98,19 +97,10 @@ class Allgemein(KonfigReiter):
         self._autostart_knopf.state(["disabled"])
         self._autostart_status.configure(text="wird geprüft …")
 
-        def pruefen():
-            try:
-                an = autostart.ist_aktiv()
-            except Exception:  # noqa: BLE001
-                an = None
-            try:
-                self.after(0, lambda: self._autostart_zeigen(an))
-            except (tk.TclError, RuntimeError):
-                pass
-        threading.Thread(target=pruefen, daemon=True).start()
+        self.im_hintergrund(autostart.ist_aktiv, self._autostart_zeigen)
 
-    def _autostart_zeigen(self, an: bool | None):
-        if an is None:
+    def _autostart_zeigen(self, an):
+        if not isinstance(an, bool):
             self._autostart_status.configure(text="Status unbekannt")
         else:
             self.autostart.set(an)
@@ -122,20 +112,12 @@ class Allgemein(KonfigReiter):
         self._autostart_knopf.state(["disabled"])
         self._autostart_status.configure(text="wird eingerichtet …" if an else "wird ausgeschaltet …")
 
-        def schalten():
-            try:
-                (autostart.aktivieren if an else autostart.deaktivieren)()
-                fehler = None
-            except Exception as e:  # noqa: BLE001
-                fehler = str(e)
-            try:
-                self.after(0, lambda: self._autostart_fertig(an, fehler))
-            except (tk.TclError, RuntimeError):
-                pass
-        threading.Thread(target=schalten, daemon=True).start()
+        self.im_hintergrund(autostart.aktivieren if an else autostart.deaktivieren,
+                            lambda erg: self._autostart_fertig(an, erg))
 
-    def _autostart_fertig(self, an: bool, fehler: str | None):
+    def _autostart_fertig(self, an: bool, erg):
         self._autostart_knopf.state(["!disabled"])
+        fehler = str(erg) if isinstance(erg, Exception) else None
         if fehler:
             self.autostart.set(not an)
             self._autostart_status.configure(text="")

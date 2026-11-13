@@ -3,6 +3,8 @@ import ctypes
 import importlib
 import logging
 import os
+import queue
+import threading
 import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, ttk
@@ -45,6 +47,30 @@ class Reiter(ttk.Frame):
     def melden(self, *_):
         self.fenster.markiere(self)
 
+    def im_hintergrund(self, arbeit, fertig) -> None:
+        """`arbeit()` in einem Thread ausführen, danach `fertig(ergebnis)` im Tk-Thread (Tk darf nur von dort
+        aus benutzt werden). Eine Ausnahme kommt als Ergebnis an."""
+        ergebnis: queue.Queue = queue.Queue()
+
+        def lauf():
+            try:
+                ergebnis.put(arbeit())
+            except Exception as e:  # noqa: BLE001
+                ergebnis.put(e)
+        threading.Thread(target=lauf, daemon=True).start()
+
+        def abholen():
+            try:
+                wert = ergebnis.get_nowait()
+            except queue.Empty:
+                try:
+                    self.after(50, abholen)
+                except tk.TclError:  # Fenster schon zu
+                    pass
+                return
+            fertig(wert)
+        self.after(50, abholen)
+
 
 class KonfigReiter(Reiter):
     """Reiter mit Feldern aus config.toml (daten.FELDER). Erzeugt Eingaben samt Titel, Erklärung und Fehlerzeile."""
@@ -81,17 +107,19 @@ class KonfigReiter(Reiter):
         z.columnconfigure(0, weight=1)
         kopf = ttk.Frame(z)
         kopf.grid(row=0, column=0, sticky="w")
-        if f.art != "bool":
-            ttk.Label(kopf, text=f.titel, style="Titel.TLabel").pack(side="left")
-        if f.neustart:
-            ttk.Label(kopf, text="  ↻ greift nach Neustart", style="Neustart.TLabel").pack(side="left")
         if name not in self.var:
             self.var[name] = tk.BooleanVar() if f.art == "bool" else tk.StringVar()
             self.var[name].trace_add("write", self._geaendert_cb(name))
+        if f.art != "bool":
+            ttk.Label(kopf, text=f.titel, style="Titel.TLabel").pack(side="left")
+        elif steuer is None:  # Schalter steht selbst in der Kopfzeile, Hinweis dahinter
+            ttk.Checkbutton(kopf, text=f.titel, variable=self.var[name], style="Switch.TCheckbutton").pack(side="left")
+        if f.neustart:
+            ttk.Label(kopf, text="  ↻ greift nach Neustart", style="Neustart.TLabel").pack(side="left")
         if steuer is not None:
             steuer(z).grid(row=1, column=0, sticky="w", pady=(4, 0))
         elif f.art == "bool":
-            ttk.Checkbutton(kopf, text=f.titel, variable=self.var[name], style="Switch.TCheckbutton").pack(side="left")
+            pass  # oben in der Kopfzeile
         elif f.art == "wahl":
             box = ttk.Combobox(z, values=[a for _, a in f.wahl], state="readonly", width=48)
             werte = [w for w, _ in f.wahl]
@@ -222,6 +250,11 @@ class Fenster:
         root.protocol("WM_DELETE_WINDOW", self.schliessen)
         for r in self.reiter:
             r.laden()
+
+    def zeige_reiter(self, titel: str) -> None:
+        for r in self.reiter:
+            if r.titel.lower() == titel.lower():
+                self.notebook.select(r)
 
     # --- für Tests ersetzbar ---------------------------------------------------------------------------------------
     def frage(self, titel: str, text: str) -> bool | None:

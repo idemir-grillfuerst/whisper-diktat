@@ -1,4 +1,5 @@
-"""Start des Einstellungsfensters: python -m diktat.einstellungen (das Tool startet es über das Symbol-Menü).
+"""Start des Einstellungsfensters: python -m diktat.einstellungen [--reiter Name]
+(das Tool startet es über das Symbol-Menü).
 
 Nur ein Fenster gleichzeitig: Ist es schon offen, kommt das vorhandene nach vorne und dieser Prozess endet.
 """
@@ -56,7 +57,9 @@ def main() -> int:
     root = tk.Tk()
     stil.einrichten(root)
     _symbol(root)
-    Fenster(root)
+    f = Fenster(root)
+    if "--reiter" in sys.argv[1:-1]:  # z. B. --reiter Befehle
+        f.zeige_reiter(sys.argv[sys.argv.index("--reiter") + 1])
     root.lift()
     root.focus_force()
     root.mainloop()

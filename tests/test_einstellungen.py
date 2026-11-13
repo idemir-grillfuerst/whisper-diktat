@@ -298,6 +298,51 @@ def test_fenster_rauch(tmp):
         root.destroy()
 
 
+def test_mikrofon_modell(tmp):
+    import tkinter as tk
+    from diktat import geraete
+    from diktat.einstellungen import fenster as fm
+    from diktat.einstellungen.mikrofon import pegel_bewertung
+    pruefe("Pegel: stumm/leise/gut", pegel_bewertung(0.001).startswith("stumm") and
+           pegel_bewertung(0.03).startswith("leise") and pegel_bewertung(0.3).startswith("gut"))
+    alt = geraete.mikrofone, geraete.recheneinheiten
+    geraete.mikrofone = lambda: ["Headset Microphone (Yealink WDD", "Mikrofonarray (Intel® Smart Sou"]
+    geraete.recheneinheiten = lambda: [("GPU", "Intel Arc 140T"), ("NPU", "Intel AI Boost"), ("CPU", "Core Ultra")]
+    dateien = temp_dateien(tmp)
+    root = tk.Tk()
+    root.withdraw()
+    try:
+        f = fm.Fenster(root, dateien=dateien)
+        f.frage = lambda *a: False
+        f.zeige_fehler = lambda text: None
+        mik = next(r for r in f.reiter if r.titel == "Mikrofon")
+        mod = next(r for r in f.reiter if r.titel == "Modell")
+        for r in (mik, mod):
+            f.notebook.select(r)
+            root.update_idletasks()
+        pruefe("Mikrofon: Liste mit Windows-Standard", mik.box.cget("values")[0] == "Windows-Standard"
+               and len(mik.box.cget("values")) == 3)
+        mik.box.current(1)
+        mik.box.event_generate("<<ComboboxSelected>>")
+        pruefe("Mikrofon: Auswahl setzt Wert", mik.var["mikrofon"].get() == "Headset Microphone (Yealink WDD")
+        for _ in range(50):  # Recheneinheiten kommen aus einem Hintergrund-Thread
+            root.update()
+            if len(mod.geraet_box.cget("values")) > 1:
+                break
+            import time
+            time.sleep(0.02)
+        pruefe("Modell: Recheneinheiten geladen", len(mod.geraet_box.cget("values")) == 4)
+        mod.var["modell"].set("large-v3")
+        mod.var["sprache"].set("en")
+        pruefe("Modell+Mikrofon übernommen", f.uebernehmen())
+        neu = dateien["config"].read_text(encoding="utf-8")
+        pruefe("Datei: Modell, Sprache, Mikrofon", 'name = "large-v3"' in neu and 'sprache = "en"' in neu
+               and 'mikrofon = "Headset Microphone (Yealink WDD"' in neu)
+    finally:
+        root.destroy()
+        geraete.mikrofone, geraete.recheneinheiten = alt
+
+
 if __name__ == "__main__":
     test_tomltext()
     test_daten()
@@ -307,5 +352,7 @@ if __name__ == "__main__":
     test_menue()
     with tempfile.TemporaryDirectory() as t:
         test_fenster_rauch(Path(t))
+    with tempfile.TemporaryDirectory() as t:
+        test_mikrofon_modell(Path(t))
     print(f"\n{len(FEHLER)} Fehler" + (": " + ", ".join(FEHLER) if FEHLER else ""))
     sys.exit(1 if FEHLER else 0)
