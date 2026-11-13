@@ -165,19 +165,37 @@ def _block(schl: str, regel: Regel) -> list[str]:
     return zeilen
 
 
+def _tabellen_pfad(zeile: str) -> tuple[str, ...] | None:
+    """Pfad eines TOML-Tabellenkopfs, egal wie geschrieben: [regeln.claude], [regeln."claude"]  # Kommentar …"""
+    if not zeile.lstrip().startswith("[") or zeile.lstrip().startswith("[["):
+        return None
+    try:
+        d = tomllib.loads(zeile.strip() + "\n")
+    except tomllib.TOMLDecodeError:
+        return None
+    pfad = []
+    while isinstance(d, dict) and len(d) == 1:
+        (schl, d), = d.items()
+        pfad.append(schl)
+    return tuple(pfad)
+
+
 def setze_regel(text: str, schl: str, regel: Regel | None) -> str:
-    """Ersetzt, ergänzt (regel) oder entfernt (None) nur den Block [regeln."schl"]. Kommentare bleiben stehen."""
-    kopf = f"[regeln.{_toml_text(schl)}]"
+    """Ersetzt, ergänzt (regel) oder entfernt (None) nur den Block [regeln."schl"]. Der Block reicht bis zum nächsten
+    Tabellenkopf; seine Wertzeilen werden ersetzt, Kommentare und Leerzeilen darin bleiben stehen."""
     zeilen = text.splitlines()
     neu, i, ersetzt = [], 0, False
     while i < len(zeilen):
-        if zeilen[i].strip() == kopf:
+        if _tabellen_pfad(zeilen[i]) == ("regeln", schl):
             i += 1
-            # Werte des Blocks überspringen; Kommentare, Leerzeilen und der nächste Kopf bleiben
-            while i < len(zeilen) and zeilen[i].strip() and not zeilen[i].lstrip().startswith(("#", "[")):
+            behalten = []
+            while i < len(zeilen) and _tabellen_pfad(zeilen[i]) is None:
+                if not zeilen[i].strip() or zeilen[i].lstrip().startswith("#"):
+                    behalten.append(zeilen[i])
                 i += 1
             if regel is not None and not ersetzt:
                 neu.extend(_block(schl, regel))
+            neu.extend(behalten)
             ersetzt = True
             continue
         neu.append(zeilen[i])
@@ -241,7 +259,9 @@ def _schreibe(schl: str, regel: Regel | None) -> None:
     if REGEL_DATEI is None:
         aus_vorlage(datei)
     alt = datei.read_text(encoding="utf-8") if datei.exists() else ""
-    datei.write_text(setze_regel(alt, schl, regel), encoding="utf-8")
+    neu = setze_regel(alt, schl, regel)
+    parse_regeln(neu)  # nie eine Datei schreiben, die danach nicht mehr lesbar ist (wirft ValueError)
+    datei.write_text(neu, encoding="utf-8")
     _CACHE.pop(datei, None)
 
 

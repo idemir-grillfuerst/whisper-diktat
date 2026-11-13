@@ -111,6 +111,7 @@ def test_app():
 
     app = hauptmodul.App.__new__(hauptmodul.App)
     app.recorder, app.tray, app.auftraege, app.ausgaben = Rec(), Tray(), queue.Queue(), queue.Queue()
+    app.vorwaermung = queue.Queue(maxsize=1)
     app.modus, app.pausiert, app._entladen = "beides", False, False
     app._maus_aufnahme = app._dauer_aktiv = app._release_ignorieren = False
     app._druck_zeit = app._start_zeit = 0.0
@@ -123,8 +124,9 @@ def test_app():
 
     app._behandle_ereignis("maus_press", 10.0)
     pruefe("App: Maus drücken startet Aufnahme", app.recorder.laeuft and app.tray.zustand == "aufnahme")
-    pruefe("App: Aufnahmestart wärmt das Textfeld vor",
-           app.ausgaben.qsize() == 1 and app.ausgaben.get_nowait() is hauptmodul.textfeld.vorwaermen)
+    pruefe("App: Aufnahmestart wärmt vor, in eigener Warteschlange (nicht vor den Ausgaben)",
+           app.vorwaermung.qsize() == 1 and app.ausgaben.empty())
+    app.vorwaermung.get_nowait()
     app._behandle_ereignis("maus_cancel", 10.2)
     pruefe("App: kurzer Klick verwirft, kein Auftrag", not app.recorder.laeuft and app.auftraege.empty())
 

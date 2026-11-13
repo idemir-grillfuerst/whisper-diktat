@@ -28,7 +28,7 @@ from . import geraete
 from .engine import Engine
 from .hotkey import PushToTalk
 from .maus import MausTaste, parse_maustaste
-from . import textfeld
+from . import textfeld, uia
 from .befehle import Aktion, Ergebnis, lade_befehle, zerlege
 from .inserter import druecke, fuege_ein
 from .recorder import RATE, Recorder
@@ -184,6 +184,8 @@ class App:
         # Ausgaben (Text einfügen, Tasten, Öffnen, Textfeld) laufen der Reihe nach in einem eigenen Thread mit COM,
         # damit UI Automation und os.startfile die Transkription nicht aufhalten
         self.ausgaben: queue.Queue = queue.Queue()
+        # Vorwärmen (UIA-Abfrage beim Aufnahmestart) in eigenem Thread: ein hängendes Fenster hält keine Ausgabe auf
+        self.vorwaermung: queue.Queue = queue.Queue(maxsize=1)
 
     # --- Modell / Recheneinheit / Mikrofon ---------------------------------------------------
     @property
@@ -515,7 +517,7 @@ class App:
             self._maus_aufnahme = True
             self._letzte_aktivitaet = self._druck_zeit = self._start_zeit = jetzt
             self.recorder.start()
-            self.ausgaben.put(textfeld.vorwaermen)  # Chromium-Bedienungshilfe aufwecken, falls gleich „Textfeld“ kommt
+            self._vorwaermen_anstossen()  # Chromium-Bedienungshilfe aufwecken, falls gleich „Textfeld“ kommt
             self.tray.setze("aufnahme", "")
             self._aufwecken()
             return
@@ -541,7 +543,7 @@ class App:
                 return
             self._druck_zeit = self._start_zeit = jetzt
             self.recorder.start()
-            self.ausgaben.put(textfeld.vorwaermen)  # Chromium-Bedienungshilfe aufwecken, falls gleich „Textfeld“ kommt
+            self._vorwaermen_anstossen()  # Chromium-Bedienungshilfe aufwecken, falls gleich „Textfeld“ kommt
             self.tray.setze("aufnahme", "")
             self._aufwecken()  # nach Leerlauf: Modell lädt, während gesprochen wird
         elif e == "release":
@@ -666,8 +668,26 @@ class App:
             self.tray.detail = (fehler or befehle.fehler or detail)[:120]
         self.ausgaben.put(ausgabe)
 
+    def _vorwaermen_anstossen(self):
+        try:
+            self.vorwaermung.put_nowait(True)
+        except queue.Full:  # läuft schon eins
+            pass
+
+    def _vorwaerm_schleife(self):
+        uia.thread_dpi_bewusst()
+        uia.vorbereiten()
+        while self._laeuft:
+            try:
+                self.vorwaermung.get(timeout=0.5)
+            except queue.Empty:
+                continue
+            textfeld.vorwaermen()
+
     def _aktions_schleife(self):
         ctypes.windll.ole32.CoInitializeEx(None, 2)  # COINIT_APARTMENTTHREADED: für UI Automation und startfile
+        uia.thread_dpi_bewusst()  # Klick, Maus und Fenster in denselben Pixeln wie UI Automation
+        uia.vorbereiten()
         while self._laeuft:
             try:
                 auftrag = self.ausgaben.get(timeout=0.5)
@@ -702,7 +722,8 @@ class App:
         for ziel, name in ((self._ereignis_schleife, "ereignisse"),
                            (self._transkriptions_schleife, "transkription"),
                            (self._wartungs_schleife, "wartung"),
-                           (self._aktions_schleife, "aktionen")):
+                           (self._aktions_schleife, "aktionen"),
+                           (self._vorwaerm_schleife, "vorwaermen")):
             threading.Thread(target=ziel, name=name, daemon=True).start()
         log.info("Bereit: %s (Bedienung %s, %s, Mikrofon %s, Leerlauf %s min%s)", self.bedien_hinweis(),
                  self.modus, self.beschreibung(), self.aktuelles_mikrofon(), self.cfg.leerlauf_minuten or "aus",

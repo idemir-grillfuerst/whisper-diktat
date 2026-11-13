@@ -88,6 +88,12 @@ def test_aktionen():
            == Ergebnis("rückgängig", [], vorher=[TF]))
     pruefe("Textfeld mitten im Satz = Text", zerlege("Das Textfeld ist leer", b, ["senden"]).vorher == [])
     pruefe("merke nicht als Vorsilbe", zerlege("Merke Textfeld bitte", b, ["senden"]).vorher == [])
+    # Review: ohne Satzzeichen nach der Vorsilbe ist es ein normaler Satz über ein Textfeld
+    pruefe("„Textfeld muss breiter werden“ = Text",
+           zerlege("Textfeld muss breiter werden. Senden.", b, ["senden"]).vorher == [])
+    pruefe("„Ins Textfeld kommt …“ = Text", zerlege("Ins Textfeld kommt die Nummer", b, ["senden"]).vorher == [])
+    pruefe("Vorsilbe mit Punkt", zerlege("Textfeld. Hallo", b, ["senden"]) == Ergebnis("Hallo", [], vorher=[TF]))
+    pruefe("Vorsilbe mit Gedankenstrich", zerlege("Textfeld – Hallo", b, ["senden"]).vorher == [TF])
     try:
         parse_befehle('[aktionen]\n"x" = "gibtsnicht"')
         pruefe("unbekannte Aktion abgelehnt", False)
@@ -172,17 +178,23 @@ def test_druecke():
 def test_klicke():
     from diktat import inserter
     pos, gesendet = [], []
-    alt = inserter._send, inserter.warte_bis_tasten_los, getattr(inserter, "_setze_maus", None),         getattr(inserter, "_lies_maus", None)
-    inserter._send = lambda inputs: gesendet.append([(i.type, i.u.mi.dwFlags) for i in inputs])
+    alt = (inserter._send, inserter.warte_bis_tasten_los, inserter._setze_maus, inserter._lies_maus,
+           getattr(inserter, "_virtueller_bildschirm", None))
+    inserter._send = lambda inputs: gesendet.append([(i.type, i.u.mi.dwFlags, i.u.mi.dx, i.u.mi.dy) for i in inputs])
     inserter.warte_bis_tasten_los = lambda *a: None
     inserter._setze_maus = lambda x, y: pos.append((x, y))
     inserter._lies_maus = lambda: (7, 8)
+    inserter._virtueller_bildschirm = lambda: (-1000, 0, 3001, 1001)  # links, oben, Breite, Höhe
     try:
-        inserter.klicke(100, 200)
-        pruefe("Maus hin und zurück", pos == [(100, 200), (7, 8)])
-        pruefe("Linksklick", gesendet == [[(0, 0x0002), (0, 0x0004)]])
+        inserter.klicke(1000, 500)
+        # Klick mit absoluten Koordinaten (0–65535 über den ganzen virtuellen Bildschirm), nicht über SetCursorPos:
+        # sonst kann das Zurücksetzen der Maus vor dem Klick greifen (Review)
+        ABS = 0x0001 | 0x8000 | 0x4000
+        pruefe("Linksklick absolut", gesendet == [[(0, ABS | 0x0002, 43690, 32767), (0, ABS | 0x0004, 43690, 32767)]])
+        pruefe("Maus danach zurück", pos == [(7, 8)])
     finally:
-        inserter._send, inserter.warte_bis_tasten_los, inserter._setze_maus, inserter._lies_maus = alt
+        (inserter._send, inserter.warte_bis_tasten_los, inserter._setze_maus, inserter._lies_maus,
+         inserter._virtueller_bildschirm) = alt
 
 
 def test_gib_aus():

@@ -22,6 +22,7 @@ LETZTES_WORT = re.compile(r"\S+\s*$")
 # Eingebaute Aktionen für [aktionen]; nur "textfeld" darf auch als Vorsilbe vor einem Text stehen
 INTERNE_AKTIONEN = ("textfeld", "textfeld_merken", "textfeld_vergessen")
 VORSILBEN_AKTIONEN = ("textfeld",)
+VORSILBEN_ZEICHEN = ",.:;!?-–—"
 
 
 @dataclass(frozen=True)
@@ -139,7 +140,9 @@ def _vorsilbe(text: str, befehle: Befehle) -> tuple[Aktion, str] | None:
     tokens = text.split()
     for satz in sorted(befehle.vorsilben, key=lambda v: len(v.split()), reverse=True):
         k = len(satz.split())
-        if len(tokens) > k and normalisiere(" ".join(tokens[:k])) == satz:
+        # Nur mit Satzzeichen danach („Textfeld, Hallo“), sonst ist es ein Satz über ein Textfeld
+        abgesetzt = len(tokens) > k and (tokens[k - 1][-1] in VORSILBEN_ZEICHEN or not normalisiere(tokens[k]))
+        if abgesetzt and normalisiere(" ".join(tokens[:k])) == satz:
             rest = " ".join(tokens[k:]).lstrip(",;:-–— ")
             if normalisiere(rest):
                 return befehle.vorsilben[satz], rest

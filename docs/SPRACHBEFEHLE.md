@@ -57,7 +57,8 @@ eigenen Einträge.
 | Vergiss Textfeld | die gemerkte Regel für das Programm/die Website vorne löschen |
 
 - Funktioniert in der Claude-App, in Teams und im Browser. Das Tool sucht das Feld über die Windows-Bedienungshilfe.
-- Nach „Textfeld,“ wird nur noch auf „Senden“ am Ende geachtet: „Textfeld, rückgängig“ schreibt das Wort hin.
+- Als Vorsilbe gilt „Textfeld“ nur mit Satzzeichen danach („Textfeld, Hallo“). „Textfeld muss breiter werden“ bleibt
+  Text. Nach „Textfeld,“ wird nur noch auf „Senden“ am Ende geachtet: „Textfeld, rückgängig“ schreibt das Wort hin.
 - Findet das Tool kein Feld, kommt eine **Windows-Meldung** und es wird **nichts** eingefügt, damit der Text nicht im
   falschen Programm landet. Der diktierte Text steht dann im Log.
 - Gemerkte Felder stehen in `textfelder.toml` (Projektordner). Dort kann man auch von Hand eine Taste oder

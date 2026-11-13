@@ -81,6 +81,23 @@ def test_regeln():
     pruefe("Anführungszeichen im Namen", parse_regeln(setze_regel("", "a", Regel(name='Sag "hi"')))["a"].name
            == 'Sag "hi"')
     pruefe("leere Datei", parse_regeln("") == {})
+    # von Hand geschriebene Varianten (Review): Kopf ohne Anführungszeichen, Kommentar am Kopf, Kommentar zwischen Werten
+    for name, hand in (("bare key", '[regeln.claude]\nname = "Alt"\n'),
+                       ("Kommentar am Kopf", '[regeln."claude"]  # Claude-App\nname = "Alt"\n'),
+                       ("Kommentar zwischen Werten", '[regeln."claude"]\nname = "Alt"\n# Notiz\ntyp = "Edit"\n')):
+        neu = setze_regel(hand, "claude", Regel(name="Prompt"))
+        try:
+            pruefe(f"Hand-Datei ({name}): ersetzt", parse_regeln(neu)["claude"] == Regel(name="Prompt"))
+        except ValueError:
+            pruefe(f"Hand-Datei ({name}): ersetzt", False)
+        weg = setze_regel(hand + '[regeln."x"]\ntaste = "f5"\n', "claude", None)
+        try:
+            r = parse_regeln(weg)
+            pruefe(f"Hand-Datei ({name}): entfernt", "claude" not in r and r["x"] == Regel(taste="f5"))
+        except ValueError:
+            pruefe(f"Hand-Datei ({name}): entfernt", False)
+    pruefe("Kommentar im Block bleibt", "# Notiz" in setze_regel('[regeln."claude"]\nname = "Alt"\n# Notiz\ntyp = "Edit"\n',
+                                                                "claude", Regel(name="Prompt")))
     for kaputt in ('[regeln."a"]\nx = 2\ny = 0.5', '[regeln."a"]\ntaste = "ctrl+blub"', '[regeln."a"]\nfoo = 1',
                    '[regeln."a"\n', '[regeln."a"]\nx = 0.5', '[regeln."a"]\n'):
         try:
@@ -269,11 +286,33 @@ def test_vorwaermen(tmp):
         aufraeumen()
 
 
+def test_dpi():
+    """Review: UIA liefert echte Bildschirmpixel, der Prozess ist aber nicht DPI-bewusst (150 % auf dem Laptop).
+    Die UIA-Threads stellen sich deshalb auf Per-Monitor-v2 um; Klick und Fensterrechteck sind dann ebenfalls echt."""
+    import ctypes
+    import threading
+    from diktat import uia
+    user32 = ctypes.windll.user32
+    user32.GetThreadDpiAwarenessContext.restype = ctypes.c_void_p
+    user32.AreDpiAwarenessContextsEqual.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+    ergebnis = {}
+
+    def faden():
+        uia.thread_dpi_bewusst()
+        ergebnis["pmv2"] = bool(user32.AreDpiAwarenessContextsEqual(user32.GetThreadDpiAwarenessContext(),
+                                                                    ctypes.c_void_p(-4)))
+    t = threading.Thread(target=faden)
+    t.start()
+    t.join()
+    pruefe("UIA-Thread rechnet in echten Pixeln (Per-Monitor v2)", ergebnis.get("pmv2") is True)
+
+
 if __name__ == "__main__":
     test_wahl()
     test_schluessel()
     test_ids()
     test_regeln()
+    test_dpi()
     with tempfile.TemporaryDirectory() as t:
         test_aktion_textfeld(Path(t))
         test_aktion_merken(Path(t))

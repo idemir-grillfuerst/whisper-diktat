@@ -26,6 +26,8 @@ GA_ROOT = 2
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 WEBSEITEN_WURZEL = "RootWebArea"   # Document einer ganzen Webseite: kein Eingabefeld
 MAX_EBENEN_HOCH = 5
+DPI_PER_MONITOR_V2 = -4
+ZEITLIMIT_MS = 1000           # je UIA-Aufruf an ein anderes Programm
 
 _lokal = threading.local()
 
@@ -37,15 +39,41 @@ class UiaFehlt(RuntimeError):
 def _uia():
     """(IUIAutomation, Typbibliothek) für diesen Thread."""
     if not hasattr(_lokal, "uia"):
-        try:
+        if not getattr(_lokal, "com", False):
             ctypes.windll.ole32.CoInitializeEx(None, 2)  # COINIT_APARTMENTTHREADED; schon initialisiert ist ok
+            _lokal.com = True
+        try:
             import comtypes.client
             m = comtypes.client.GetModule("UIAutomationCore.dll")
-            _lokal.uia = comtypes.client.CreateObject(m.CUIAutomation, interface=m.IUIAutomation)
-            _lokal.m = m
+            try:  # ab Windows 8: mit Zeitlimit, damit hängende Fenster nicht ca. 20 s blockieren
+                obj = comtypes.client.CreateObject(m.CUIAutomation8, interface=m.IUIAutomation2)
+                obj.ConnectionTimeout = ZEITLIMIT_MS
+                obj.TransactionTimeout = ZEITLIMIT_MS
+            except Exception:  # noqa: BLE001
+                obj = comtypes.client.CreateObject(m.CUIAutomation, interface=m.IUIAutomation)
         except (ImportError, OSError) as e:
             raise UiaFehlt(f"UI Automation nicht verfügbar: {e}") from None
+        _lokal.uia, _lokal.m = obj, m
     return _lokal.uia, _lokal.m
+
+
+def thread_dpi_bewusst() -> None:
+    """Diesen Thread auf echte Bildschirmpixel umstellen (Per-Monitor v2). UI Automation liefert immer echte Pixel;
+    ohne Umstellung rechnen GetCursorPos/SetCursorPos/GetWindowRect bei 150 % Skalierung in anderen Einheiten."""
+    try:
+        user32.SetThreadDpiAwarenessContext.restype = ctypes.c_void_p
+        user32.SetThreadDpiAwarenessContext.argtypes = [ctypes.c_void_p]
+        user32.SetThreadDpiAwarenessContext(ctypes.c_void_p(DPI_PER_MONITOR_V2))
+    except (AttributeError, OSError):  # vor Windows 10 1607
+        pass
+
+
+def vorbereiten() -> None:
+    """UIA für diesen Thread schon beim Start laden (beim allerersten Mal erzeugt comtypes Code, das dauert)."""
+    try:
+        _uia()
+    except UiaFehlt:
+        pass
 
 
 # --- Fenster -----------------------------------------------------------------------------------------------------

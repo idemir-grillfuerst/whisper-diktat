@@ -181,6 +181,8 @@ def druecke(kombi: str) -> None:
 
 
 INPUT_MOUSE, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP = 0, 0x0002, 0x0004
+MOUSEEVENTF_MOVE, MOUSEEVENTF_ABSOLUTE, MOUSEEVENTF_VIRTUALDESK = 0x0001, 0x8000, 0x4000
+SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN = 76, 77, 78, 79
 
 
 def _lies_maus() -> tuple[int, int]:
@@ -193,14 +195,26 @@ def _setze_maus(x: int, y: int) -> None:
     user32.SetCursorPos(int(x), int(y))
 
 
+def _virtueller_bildschirm() -> tuple[int, int, int, int]:
+    """Links, oben, Breite, Höhe aller Monitore zusammen (in den Pixeln des aufrufenden Threads)."""
+    m = user32.GetSystemMetrics
+    return m(SM_XVIRTUALSCREEN), m(SM_YVIRTUALSCREEN), m(SM_CXVIRTUALSCREEN), m(SM_CYVIRTUALSCREEN)
+
+
 def klicke(x: int, y: int) -> None:
-    """Linksklick an Bildschirmposition (x, y); der Mauszeiger kommt danach an seine alte Stelle zurück."""
+    """Linksklick an Bildschirmposition (x, y); der Mauszeiger kommt danach an seine alte Stelle zurück.
+    Die Position steckt im Klick selbst (absolut, 0–65535 über alle Monitore). Mit SetCursorPos vorher könnte das
+    Zurücksetzen greifen, bevor Windows den Klick verarbeitet hat."""
     warte_bis_tasten_los()  # sonst wird aus dem Klick bei gehaltenem Strg ein Strg+Klick
     alt = _lies_maus()
-    _setze_maus(x, y)
+    links, oben, breite, hoehe = _virtueller_bildschirm()
+    dx = int((x - links) * 65535 / max(1, breite - 1))
+    dy = int((y - oben) * 65535 / max(1, hoehe - 1))
+    absolut = MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK
     try:
-        _send([INPUT(type=INPUT_MOUSE, u=_U(mi=MOUSEINPUT(dwFlags=MOUSEEVENTF_LEFTDOWN))),
-               INPUT(type=INPUT_MOUSE, u=_U(mi=MOUSEINPUT(dwFlags=MOUSEEVENTF_LEFTUP)))])
+        _send([INPUT(type=INPUT_MOUSE, u=_U(mi=MOUSEINPUT(dx=dx, dy=dy, dwFlags=absolut | MOUSEEVENTF_LEFTDOWN))),
+               INPUT(type=INPUT_MOUSE, u=_U(mi=MOUSEINPUT(dx=dx, dy=dy, dwFlags=absolut | MOUSEEVENTF_LEFTUP)))])
+        time.sleep(0.03)  # Klick erst verarbeiten lassen
     finally:
         _setze_maus(*alt)
 

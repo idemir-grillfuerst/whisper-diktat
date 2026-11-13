@@ -45,6 +45,7 @@ def zeige(hwnd: int) -> None:
 
 
 if __name__ == "__main__":
+    uia.thread_dpi_bewusst()
     if "--prozess" in sys.argv:
         name = sys.argv[sys.argv.index("--prozess") + 1]
         h = hauptfenster(name)
