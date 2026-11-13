@@ -69,6 +69,8 @@ def test_zerlege():
     pruefe("leere Befehle", zerlege("Öffne Outlook", Befehle({}), E) == Ergebnis("Öffne Outlook", []))
     pruefe("Enter-Variante aus Liste", zerlege("Hallo, Enta.", b, ["enter", "enta"]) == Ergebnis("Hallo", [ENTER]))
     pruefe("Wort, das nur mit enter endet", zerlege("Das ist ein Center", b, E).aktionen == [])
+    pruefe("Senden am Ende", zerlege("Passt so. Senden.", b, ["enter", "senden"]) == Ergebnis("Passt so.", [ENTER]))
+    pruefe("Senden mitten im Satz", zerlege("Senden wir das morgen", b, ["enter", "senden"]).aktionen == [])
 
 
 def test_laden(tmp):
@@ -98,21 +100,25 @@ def test_vorlage():
     pruefe("Outlook im Browser", b.saetze["öffne outlook"].ziel.startswith("https://outlook."))
     pruefe("rückgängig", b.saetze["rückgängig"] == Aktion("taste", "ctrl+z"))
     pruefe("Emoji-Taste win+.", b.saetze["emoji"] == Aktion("taste", "win+."))
+    for satz, taste in (("copy", "ctrl+c"), ("paste", "ctrl+v"), ("cut", "ctrl+x"), ("undo", "ctrl+z"),
+                        ("strg c", "ctrl+c"), ("strg v", "ctrl+v"), ("select all", "ctrl+a")):
+        pruefe(f"Einzelwort {satz}", b.saetze.get(satz) == Aktion("taste", taste))
+    pruefe("Copy im Satz bleibt Text", zerlege("Mach mal eine Copy davon", b, ["enter"]).aktionen == [])
 
 
 def test_config_enter(tmp):
     c = tmp / "config.toml"
     c.write_text((PROJEKT / "config.beispiel.toml").read_text(encoding="utf-8"), encoding="utf-8")
-    pruefe("enter Standard", lade_config(c).enter_woerter == ["enter"])
+    pruefe("enter Standard", lade_config(c).enter_woerter == ["enter", "senden"])
     c.write_text('[modell]\nname = "turbo"\n', encoding="utf-8")
-    pruefe("alte Datei ohne [befehle]", lade_config(c).enter_woerter == ["enter"])
+    pruefe("alte Datei ohne [befehle]", lade_config(c).enter_woerter == ["enter", "senden"])
     c.write_text('[befehle]\nenter = []\n', encoding="utf-8")
     pruefe("enter aus", lade_config(c).enter_woerter == [])
     c.write_text('[befehle]\nenter = "enter"\n', encoding="utf-8")
     pruefe("enter als Text statt Liste", lade_config(c).enter_woerter == ["enter"])
     c.write_text('befehle = 1\n', encoding="utf-8")
     try:
-        pruefe("befehle kein Abschnitt: Standard", lade_config(c).enter_woerter == ["enter"])
+        pruefe("befehle kein Abschnitt: Standard", lade_config(c).enter_woerter == ["enter", "senden"])
     except Exception:  # noqa: BLE001
         pruefe("befehle kein Abschnitt: Standard", False)
 
