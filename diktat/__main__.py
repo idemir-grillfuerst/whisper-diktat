@@ -461,6 +461,8 @@ class App:
             return
         self._config_mtime = mtime
         try:
+            if not self._config_datei.read_text(encoding="utf-8").strip():
+                return  # gerade beim Speichern (Editor leert erst, schreibt dann): nächste Änderung abwarten
             neu = lade_config(self._config_datei)
         except Exception as e:  # noqa: BLE001 – kaputte Datei: mit den alten Werten weiterlaufen
             log.warning("config.toml fehlerhaft, alte Einstellungen bleiben: %s", e)
@@ -472,6 +474,9 @@ class App:
         """Neue Einstellungen übernehmen, soweit es ohne Neustart geht. Rückgabe: Namen der geänderten Felder."""
         alt = self.cfg
         geaendert = [f.name for f in dataclasses.fields(Config) if getattr(alt, f.name) != getattr(neu, f.name)]
+        # Was erst nach einem Neustart greift, bleibt bis dahin beim alten Wert (sonst nennt das Symbol eine
+        # Tastenkombination, die der Hook noch gar nicht kennt)
+        neu = dataclasses.replace(neu, **{n: getattr(alt, n) for n in NEUSTART_FELDER})
         self.cfg = neu
         self.modelle = neu.modelle
         if neu.modus != self.modus:

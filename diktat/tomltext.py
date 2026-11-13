@@ -85,6 +85,25 @@ def _kommentar(zeile: str) -> str:
     return ""
 
 
+def _kommentar_roh(zeile: str) -> str:
+    """Kommentar ab dem ersten # außerhalb von Strings (für Zeilen mitten in mehrzeiligen Werten)."""
+    in_str, i = None, 0
+    while i < len(zeile):
+        c = zeile[i]
+        if in_str:
+            if c == "\\" and in_str == '"':
+                i += 2
+                continue
+            if c == in_str:
+                in_str = None
+        elif c in "\"'":
+            in_str = c
+        elif c == "#":
+            return zeile[i:]
+        i += 1
+    return ""
+
+
 def _abschnitt(zeilen: list[str], abschnitt: str) -> tuple[int, int] | None:
     """(Index des Kopfs, Index hinter dem Abschnitt) oder None."""
     start = None
@@ -131,9 +150,14 @@ def setze(text: str, abschnitt: str, schluessel: str, wert, neuer_schluessel: st
     letzte = kopf
     for norm, roh, a, b in _werte(zeilen, kopf + 1, ende):
         if norm == schluessel:
-            kommentar = _kommentar(zeilen[a]) if a == b else ""
             name = schluessel_text(neuer_schluessel) if neuer_schluessel is not None else roh
-            zeilen[a:b + 1] = [f"{name} = {wert_text(wert)}{kommentar}"]
+            if a == b:
+                zeilen[a:b + 1] = [f"{name} = {wert_text(wert)}{_kommentar(zeilen[a])}"]
+            else:  # mehrzeiliger Wert: Kommentare darin als eigene Zeilen davor behalten, den am Ende dahinter
+                einzug = re.match(r"\s*", zeilen[a]).group()
+                davor = [einzug + k for k in (_kommentar_roh(z) for z in zeilen[a:b]) if k]
+                ende = _kommentar_roh(zeilen[b])
+                zeilen[a:b + 1] = davor + [f"{name} = {wert_text(wert)}" + (f" {ende}" if ende else "")]
             return "\n".join(zeilen) + "\n"
         letzte = b
     if letzte == kopf:  # Abschnitt ohne Werte: hinter Kopf und direkt folgende Kommentare

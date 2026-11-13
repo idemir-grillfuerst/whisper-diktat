@@ -9,7 +9,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, ttk
 
-from ..config import BEFEHLE_DATEI, CONFIG_DATEI, FACHWORT_DATEI, TEXTFELDER_DATEI
+from ..config import BEFEHLE_DATEI, CONFIG_DATEI, FACHWORT_DATEI, TEXTFELDER_DATEI, schreibe_atomar
 from . import daten, stil
 
 log = logging.getLogger("diktat")
@@ -43,6 +43,9 @@ class Reiter(ttk.Frame):
     def uebernehmen(self) -> list[str]:
         """Änderungen in die Dateien schreiben; Rückgabe: Namen der geänderten Felder (für ↻)."""
         return []
+
+    def aktualisieren(self) -> None:
+        """Dateistand neu lesen, falls er sich von außen geändert hat. Standard: nichts."""
 
     def melden(self, *_):
         self.fenster.markiere(self)
@@ -87,6 +90,9 @@ class KonfigReiter(Reiter):
         self._fehler_label: dict[str, ttk.Label] = {}
         self._zeilen: dict[str, ttk.Frame] = {}
         self._zeile = 0
+        self.angefasst: set[str] = set()   # vom Nutzer seit dem letzten Laden/Übernehmen geänderte Felder
+        self._laedt = False
+        self._mtime = None
 
     # --- Bausteine -------------------------------------------------------------------------------------------------
     def ueberschrift(self, text: str, erklaerung: str = ""):
@@ -149,6 +155,8 @@ class KonfigReiter(Reiter):
 
     def _geaendert_cb(self, name):
         def cb(*_):
+            if not self._laedt:
+                self.angefasst.add(name)
             meldung = self._feldfehler(name)
             if name in self._fehler_label:
                 lab = self._fehler_label[name]
@@ -186,22 +194,42 @@ class KonfigReiter(Reiter):
         return roh
 
     def laden(self):
+        self.angefasst.clear()
+        self._lesen(alle=True, zeige_fehler=True)
+
+    def aktualisieren(self):
         try:
+            mtime = self._datei().stat().st_mtime
+        except OSError:
+            return
+        if mtime != self._mtime:
+            self._lesen(alle=False, zeige_fehler=False)
+
+    def _lesen(self, alle: bool, zeige_fehler: bool):
+        """Werte aus der Datei: `original` immer, Eingaben nur für nicht angefasste Felder (oder alle)."""
+        try:
+            self._mtime = self._datei().stat().st_mtime
             werte = daten.lies_werte(self._datei().read_text(encoding="utf-8"))
         except (OSError, ValueError) as e:
-            self.fenster.zeige_fehler(f"config.toml lässt sich nicht lesen: {e}")
+            if zeige_fehler:
+                self.fenster.zeige_fehler(f"config.toml lässt sich nicht lesen: {e}")
             return
-        for name in self.felder:
-            self.original[name] = werte[name]
-            if name in self.var:
-                self._setze_var(name, werte[name])
+        self._laedt = True
+        try:
+            for name in self.felder:
+                self.original[name] = werte[name]
+                if name in self.var and (alle or name not in self.angefasst):
+                    self._setze_var(name, werte[name])
+        finally:
+            self._laedt = False
         self.melden()
 
     def _feldfehler(self, name) -> str | None:
         return daten.pruefe_wert(name, self.wert(name))
 
     def aenderungen(self) -> dict[str, object]:
-        return {n: self.wert(n) for n in self.felder if n in self.var and self.wert(n) != self.original.get(n)}
+        return {n: self.wert(n) for n in self.felder
+                if n in self.var and n in self.angefasst and self.wert(n) != self.original.get(n)}
 
     def geaendert(self) -> bool:
         return bool(self.aenderungen())
@@ -214,8 +242,10 @@ class KonfigReiter(Reiter):
         if not aend:
             return []
         datei = self._datei()
-        datei.write_text(daten.schreibe_werte(datei.read_text(encoding="utf-8"), aend), encoding="utf-8")
+        schreibe_atomar(datei, daten.schreibe_werte(datei.read_text(encoding="utf-8"), aend))
         self.original.update(aend)
+        self.angefasst.clear()
+        self._mtime = datei.stat().st_mtime
         self.melden()
         return list(aend)
 
@@ -248,8 +278,28 @@ class Fenster:
         ttk.Button(unten, text="Übernehmen", command=self.uebernehmen).pack(side="right", padx=(0, 8))
         ttk.Button(unten, text="OK", style="Accent.TButton", command=self.ok).pack(side="right", padx=(0, 8))
         root.protocol("WM_DELETE_WINDOW", self.schliessen)
+        root.report_callback_exception = self._callback_fehler
         for r in self.reiter:
             r.laden()
+        self._auffrischen()
+
+    def _callback_fehler(self, art, wert, tb):
+        """Fehler in einem Klick: ins Log und anzeigen, statt still nichts zu tun."""
+        log.error("Fehler im Einstellungsfenster", exc_info=(art, wert, tb))
+        self.zeige_fehler(f"Da ist etwas schiefgegangen:\n{wert}\n\nDetails stehen in logs\\einstellungen.log.")
+
+    def _auffrischen(self):
+        """Alle 2 s: Hat jemand (Symbol-Menü, merke Textfeld, Editor) die Dateien geändert? Dann nicht angefasste
+        Werte im Fenster nachziehen."""
+        for r in self.reiter:
+            try:
+                r.aktualisieren()
+            except Exception:  # noqa: BLE001
+                log.exception("Auffrischen fehlgeschlagen")
+        try:
+            self.root.after(2000, self._auffrischen)
+        except tk.TclError:
+            pass
 
     def zeige_reiter(self, titel: str) -> None:
         for r in self.reiter:
@@ -273,6 +323,8 @@ class Fenster:
         self.notebook.tab(reiter, text=reiter.titel + (" •" if reiter.geaendert() else ""))
 
     def uebernehmen(self) -> bool:
+        for r in self.reiter:
+            r.aktualisieren()  # gegen den aktuellen Dateistand vergleichen
         fehler = {f"{r.titel}: {daten.FELDER[n].titel if n in daten.FELDER else n}": m
                   for r in self.reiter for n, m in r.fehler().items()}
         if fehler:

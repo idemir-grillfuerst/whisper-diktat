@@ -1,4 +1,6 @@
-# Einstellungen für whisper-diktat. Nach Änderungen das Tool neu starten.
+# Einstellungen für whisper-diktat. Am einfachsten im Einstellungsfenster ändern (Klick auf das Symbol).
+# Änderungen hier übernimmt das Tool nach wenigen Sekunden; shortcut, maustaste und mikrofon_offen_halten erst
+# nach einem Neustart.
 # Vorlage: Beim ersten Start wird daraus config.toml (deine persönliche Kopie, nicht in Git).
 # Modell, Recheneinheit, Mikrofon und Bedienung lassen sich auch im Menü (Rechtsklick auf das Symbol) wählen.
 
@@ -57,4 +59,4 @@ repo = "OpenVINO/whisper-large-v3-int8-ov"
 # Nur am Ende: „Senden wir das morgen“ bleibt Text, „Passt so. Senden.“ schickt ab.
 # Schreibt Whisper das Wort bei dir anders (z. B. "Enta"), die Variante hier ergänzen.
 enter = ["enter", "senden"]
-# Feste Sprachbefehle (Programme/Seiten öffnen, Tastenkürzel) stehen in befehle.toml (Menü „Befehle bearbeiten …“).
+# Feste Sprachbefehle (Programme/Seiten öffnen, Tastenkürzel) stehen in befehle.toml (Einstellungen → Befehle).

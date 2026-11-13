@@ -4,6 +4,7 @@ Befehle als Liste, Textfeld-Regeln, lesbare Anzeigen.
 Geschrieben wird immer in den vorhandenen Dateitext (tomltext), nur die geänderten Werte, und nie ein Text, der
 danach nicht mehr geladen werden kann.
 """
+import math
 import tomllib
 from dataclasses import dataclass
 
@@ -137,6 +138,8 @@ def pruefe_wert(name: str, wert) -> str | None:
         try:
             z = zahl(wert)
         except ValueError:
+            return "Bitte eine Zahl eingeben."
+        if not math.isfinite(z):
             return "Bitte eine Zahl eingeben."
         if (f.von is not None and z < f.von) or (f.bis is not None and z > f.bis):
             return f"Erlaubt: {f.von:g} bis {f.bis:g} {f.einheit}".strip()

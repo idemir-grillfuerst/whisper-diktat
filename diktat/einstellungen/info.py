@@ -4,7 +4,7 @@ import subprocess
 import sys
 from tkinter import ttk
 
-from .. import PROJEKT
+from .. import PROJEKT, __author__
 from . import stil
 from .fenster import Reiter
 
@@ -36,6 +36,8 @@ class Info(Reiter):
         f = ttk.Frame(self, padding=(20, 16))
         f.pack(fill="both", expand=True)
         ttk.Label(f, text="whisper-diktat", style="Ueberschrift.TLabel").pack(anchor="w")
+        ttk.Label(f, text=f"von {__author__} · entwickelt mit Unterstützung von Claude (Anthropic)",
+                  style="Titel.TLabel").pack(anchor="w", pady=(2, 0))
         stil.erklaerung(f, "Lokales Diktier-Tool: nimmt per Tastenkombination auf, schreibt mit Whisper auf deinem "
                         "Rechner mit und fügt den Text dort ein, wo der Cursor steht. Die Aufnahme verlässt den "
                         "Rechner nie.").pack(anchor="w", pady=(2, 12))

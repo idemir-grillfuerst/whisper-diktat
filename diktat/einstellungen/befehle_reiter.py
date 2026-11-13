@@ -6,6 +6,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from ..befehle import normalisiere
+from ..config import schreibe_atomar
 from . import stil
 from .daten import ARTEN_LESBAR, Befehl, lies_befehle, setze_befehl, wirkung_lesbar
 from .dialoge import befehl_bearbeiten
@@ -114,7 +115,7 @@ class BefehleReiter(Reiter):
     def speichern(self, alt: Befehl | None, neu: Befehl | None) -> bool:
         try:
             text = setze_befehl(self._text(), alt, neu)
-            self._datei().write_text(text, encoding="utf-8")
+            schreibe_atomar(self._datei(), text)
         except (OSError, ValueError) as e:
             self.fenster.zeige_fehler(f"Befehl konnte nicht gespeichert werden:\n{e}")
             return False

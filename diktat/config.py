@@ -4,6 +4,7 @@ Beide Dateien sind persönlich und nicht in Git. Im Repo liegen nur die Vorlagen
 fachwoerter.beispiel.txt. Fehlt eine persönliche Datei, wird sie beim ersten Zugriff aus der Vorlage angelegt.
 """
 import logging
+import os
 import shutil
 import tomllib
 from dataclasses import dataclass
@@ -171,12 +172,22 @@ def _toml_text(wert: str) -> str:
     return tomltext._toml_text(wert)
 
 
+def schreibe_atomar(datei: Path, text: str) -> None:
+    """Erst in eine Nachbardatei schreiben, dann austauschen: Bricht etwas ab, bleibt die alte Datei ganz."""
+    tmp = datei.with_name(f".{datei.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, datei)
+    except PermissionError:  # z. B. Datei gerade von einem anderen Programm gesperrt: normal schreiben
+        tmp.unlink(missing_ok=True)
+        datei.write_text(text, encoding="utf-8")
+
+
 def speichere_wert(abschnitt: str, schluessel: str, wert, datei=None) -> None:
     """Setzt in config.toml `schluessel = wert` im Abschnitt [abschnitt]; fehlt die Zeile oder der Abschnitt, wird
     sie ergänzt. Kommentare und alles andere bleiben unverändert."""
     datei = datei or CONFIG_DATEI
-    datei.write_text(tomltext.setze(datei.read_text(encoding="utf-8"), abschnitt, schluessel, wert),
-                     encoding="utf-8")
+    schreibe_atomar(datei, tomltext.setze(datei.read_text(encoding="utf-8"), abschnitt, schluessel, wert))
 
 
 def speichere_modell(name: str, datei=None) -> None:

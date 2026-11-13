@@ -2,6 +2,7 @@
 import tkinter as tk
 from tkinter import ttk
 
+from ..config import schreibe_atomar
 from . import stil
 from .daten import FACHWORT_GRENZE, fachwort_laenge
 from .fenster import Reiter
@@ -77,7 +78,7 @@ class Fachwoerter(Reiter):
 
     def uebernehmen(self) -> list[str]:
         neu = self._inhalt().rstrip("\n") + "\n"
-        self.fenster.dateien["fachwoerter"].write_text(neu, encoding="utf-8")
+        schreibe_atomar(self.fenster.dateien["fachwoerter"], neu)
         self._original = neu
         self.melden()
         return []

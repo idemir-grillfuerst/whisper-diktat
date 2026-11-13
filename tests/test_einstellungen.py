@@ -29,6 +29,13 @@ def test_tomltext():
     x = setze(T, "allgemein", "x", 1)
     pruefe("ergänzt im Abschnitt, vor dem nächsten", x.index("x = 1") < x.index("[modell]")
            and tomllib.loads(x)["allgemein"]["x"] == 1)
+    ML = '[befehle]\nenter = [\n  "enter",  # erstes\n  # ganze Zeile\n  "senden",\n] # ende\nx = 1\n'
+    ml = setze(ML, "befehle", "enter", ["senden"])
+    pruefe("Review: Kommentare in mehrzeiligem Wert bleiben", all(k in ml for k in ("# erstes", "# ganze Zeile",
+                                                                                   "# ende"))
+           and tomllib.loads(ml)["befehle"] == {"enter": ["senden"], "x": 1})
+    pruefe("Review: # im String ist kein Kommentar", "# nicht" not in setze('[a]\nb = [\n  "x # nicht",\n]\n', "a",
+                                                                          "b", ["y"]))
     pruefe("Kommazahl", tomllib.loads(setze(T, "allgemein", "t", 0.4))["allgemein"]["t"] == 0.4)
     pruefe("Liste", 'enter = ["senden", "enter"]' in setze(T, "befehle", "enter", ["senden", "enter"]))
     pruefe("neuer Abschnitt gültig",
@@ -74,6 +81,8 @@ def test_daten():
            == {"shortcut", "maustaste", "mikrofon_offen_halten"})
     pruefe("jedes Feld erklärt", all(f.titel and f.erklaerung for f in FELDER.values()))
     pruefe("Shortcut falsch", pruefe_wert("shortcut", "ctrl") is not None and pruefe_wert("shortcut", "ctrl+win") is None)
+    pruefe("Review: nan/inf abgelehnt", pruefe_wert("min_dauer_s", "nan") is not None
+           and pruefe_wert("max_aufnahme_s", "inf") is not None)
     pruefe("Zahl falsch", pruefe_wert("max_aufnahme_s", "abc") is not None and pruefe_wert("tipp_grenze_s", 5) is not None
            and pruefe_wert("tipp_grenze_s", 0.4) is None and pruefe_wert("leerlauf_minuten", -1) is not None)
     pruefe("Wahl falsch", pruefe_wert("modus", "irgendwas") is not None and pruefe_wert("modus", "halten") is None)
@@ -170,7 +179,8 @@ def test_tool_seite(tmp):
     geaendert = app._config_anwenden(lade_config_text(neu))
     pruefe("Tool: Bedienung live", app.modus == "halten" and app.cfg.modus == "halten")
     pruefe("Tool: Modellwechsel", ("wechsle", "large-v3", None) in aufrufe)
-    pruefe("Tool: Shortcut nur gemeldet", "shortcut" in geaendert and app.cfg.shortcut == "ctrl+win")
+    pruefe("Tool: Shortcut nur gemeldet", "shortcut" in geaendert)
+    pruefe("Review: Symbol zeigt bis zum Neustart die alte Kombination", app.cfg.shortcut == "ctrl+y")
     aufrufe.clear()
     neu = setze(neu, "allgemein", "mikrofon", "Headset")
     app._config_anwenden(lade_config_text(neu))
@@ -197,6 +207,22 @@ def test_tool_seite(tmp):
     anzahl = len(meldungen)
     app._config_pruefen()
     pruefe("Tool: Meldung nur einmal je Änderung", len(meldungen) == anzahl)
+    datei.write_text(C, encoding="utf-8")
+    t += 5
+    os.utime(datei, (t, t))
+    app._config_pruefen()
+    app.modus = app.cfg.modus = "halten"
+    datei.write_text("", encoding="utf-8")
+    t += 5
+    os.utime(datei, (t, t))
+    app._config_pruefen()
+    pruefe("Review: leere Datei (gerade gespeichert) -> nichts übernehmen", app.cfg.modus == "halten")
+    from diktat.config import schreibe_atomar
+    ziel = tmp / "atomar.toml"
+    ziel.write_text("alt", encoding="utf-8")
+    schreibe_atomar(ziel, "neu\n")
+    pruefe("Review: atomar geschrieben, keine Reste", ziel.read_text(encoding="utf-8") == "neu\n"
+           and [x.name for x in tmp.iterdir() if x.name.startswith("atomar")] == ["atomar.toml"])
 
 
 def test_menue():
@@ -291,6 +317,9 @@ def test_fenster_rauch(tmp):
         pruefe("Shortcut übernommen", f.uebernehmen() and 'shortcut = "ctrl+win"' in
                dateien["config"].read_text(encoding="utf-8"))
         pruefe("Shortcut: Neustart angeboten", neustart == ["shortcut"])
+        fehler.clear()
+        root.report_callback_exception(RuntimeError, RuntimeError("kaputt im Klick"), None)
+        pruefe("Review: Fehler in Klicks werden angezeigt", fehler and "kaputt im Klick" in fehler[-1])
         a.var["enter"].set("senden, enter")
         pruefe("Absenden-Wörter als Liste", f.uebernehmen() and 'enter = ["senden", "enter"]' in
                dateien["config"].read_text(encoding="utf-8"))
@@ -336,6 +365,25 @@ def test_mikrofon_modell(tmp):
         mod.var["sprache"].set("en")
         pruefe("Modell+Mikrofon übernommen", f.uebernehmen())
         neu = dateien["config"].read_text(encoding="utf-8")
+        # Review: Menü ändert Mikrofon, während das Fenster offen ist -> Fenster frischt auf; Rückkehr wird geschrieben
+        import os as _os
+        import time as _time
+        from diktat.tomltext import setze as _setze
+        d = dateien["config"]
+        d.write_text(_setze(d.read_text(encoding="utf-8"), "allgemein", "mikrofon", "Menü-Mikro"), encoding="utf-8")
+        _t = _time.time() + 10
+        _os.utime(d, (_t, _t))
+        mik.aktualisieren()
+        pruefe("Review: Fenster frischt nicht angefasste Werte auf", mik.var["mikrofon"].get() == "Menü-Mikro")
+        mik.var["mikrofon"].set("Headset Microphone (Yealink WDD")
+        pruefe("Review: Rückkehr zum alten Wert wird geschrieben", f.uebernehmen()
+               and 'mikrofon = "Headset Microphone (Yealink WDD"' in d.read_text(encoding="utf-8"))
+        mod.var["sprache"].set("de")
+        d.write_text(_setze(d.read_text(encoding="utf-8"), "allgemein", "sprache", "en"), encoding="utf-8")
+        _os.utime(d, (_t + 10, _t + 10))
+        mod.aktualisieren()
+        pruefe("Review: angefasste Werte bleiben beim Auffrischen", mod.var["sprache"].get() == "de")
+        neu = d.read_text(encoding="utf-8")
         pruefe("Datei: Modell, Sprache, Mikrofon", 'name = "large-v3"' in neu and 'sprache = "en"' in neu
                and 'mikrofon = "Headset Microphone (Yealink WDD"' in neu)
     finally:

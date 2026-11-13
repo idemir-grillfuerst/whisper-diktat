@@ -96,8 +96,10 @@ Mond = Modell im Leerlauf entladen (lädt beim nächsten Diktat nach) · schwarz
 
 ## Einstellungen
 
-`config.toml` (Menü → „Einstellungen öffnen“, wirkt nach einem Neustart). Die Datei ist persönlich und nicht
-in Git. Beim ersten Start entsteht sie aus der Vorlage `config.beispiel.toml`. Genauso entsteht
+Klick auf das Symbol öffnet das **Einstellungsfenster** (Reiter Allgemein, Mikrofon, Modell, Befehle,
+Textfelder, Fachwörter, Info), jede Option ist dort erklärt. Gespeichert wird in `config.toml`; das Tool
+übernimmt Änderungen nach wenigen Sekunden, Tastenkombination und Maustaste nach einem Neustart. Die Datei ist
+persönlich und nicht in Git. Beim ersten Start entsteht sie aus der Vorlage `config.beispiel.toml`. Genauso entsteht
 `fachwoerter.txt` aus `fachwoerter.beispiel.txt`.
 
 | Schlüssel | Standard | Bedeutung |

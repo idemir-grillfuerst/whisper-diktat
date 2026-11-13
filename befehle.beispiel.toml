@@ -1,5 +1,6 @@
 # Sprachbefehle für whisper-diktat. Vorlage: Beim ersten Start wird daraus befehle.toml (deine persönliche Kopie,
-# nicht in Git). Änderungen greifen beim nächsten Diktat, ohne Neustart. Menü: „Befehle bearbeiten …“
+# nicht in Git). Änderungen greifen beim nächsten Diktat, ohne Neustart. Am einfachsten im Einstellungsfenster
+# bearbeiten: Klick auf das Symbol → Reiter „Befehle“.
 #
 # Ein Befehl löst nur aus, wenn das GANZE Diktat genau so ein Satz ist. „Bitte mach das rückgängig“ bleibt Text.
 # Groß-/Kleinschreibung und Satzzeichen sind egal. Mehrere Schreibweisen mit | trennen.

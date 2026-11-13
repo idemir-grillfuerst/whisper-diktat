@@ -17,7 +17,7 @@ from pathlib import Path
 
 from . import inserter, marker, uia
 from .befehle import pruefe_tasten
-from .config import TEXTFELDER_DATEI, _toml_text, aus_vorlage
+from .config import TEXTFELDER_DATEI, _toml_text, aus_vorlage, schreibe_atomar
 from .tomltext import tabellen_pfad
 from .uia import UiaFehlt
 
@@ -247,7 +247,7 @@ def _schreibe(schl: str, regel: Regel | None) -> None:
     alt = datei.read_text(encoding="utf-8") if datei.exists() else ""
     neu = setze_regel(alt, schl, regel)
     parse_regeln(neu)  # nie eine Datei schreiben, die danach nicht mehr lesbar ist (wirft ValueError)
-    datei.write_text(neu, encoding="utf-8")
+    schreibe_atomar(datei, neu)
     _CACHE.pop(datei, None)
 
 

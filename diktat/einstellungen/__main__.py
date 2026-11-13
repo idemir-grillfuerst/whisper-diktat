@@ -46,7 +46,23 @@ def _symbol(root: tk.Tk) -> None:
         pass
 
 
+def _logging() -> None:
+    """Eigenes Log für das Fenster (unter pythonw gäbe es sonst keine Fehlerausgabe)."""
+    import logging
+    from logging.handlers import RotatingFileHandler
+    from .. import PROJEKT
+    try:
+        (PROJEKT / "logs").mkdir(exist_ok=True)
+        h = RotatingFileHandler(PROJEKT / "logs" / "einstellungen.log", maxBytes=500_000, backupCount=1,
+                                encoding="utf-8")
+        h.setFormatter(logging.Formatter("%(asctime)s %(levelname)-7s %(name)s: %(message)s"))
+        logging.basicConfig(level=logging.INFO, handlers=[h])
+    except OSError:
+        pass
+
+
 def main() -> int:
+    _logging()
     try:
         ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))  # scharfe Schrift bei 150 %
     except (AttributeError, OSError):

@@ -2,6 +2,7 @@
 import os
 from tkinter import messagebox, ttk
 
+from ..config import schreibe_atomar
 from . import stil
 from .daten import regel_loeschen, regeln_liste
 from .fenster import Reiter
@@ -62,7 +63,7 @@ class TextfelderReiter(Reiter):
         if not schluessel or not self.bestaetigen(f"Gemerktes Textfeld für „{schluessel}“ löschen?"):
             return
         try:
-            self._datei().write_text(regel_loeschen(self._text(), schluessel), encoding="utf-8")
+            schreibe_atomar(self._datei(), regel_loeschen(self._text(), schluessel))
         except (OSError, ValueError) as e:
             self.fenster.zeige_fehler(f"Konnte nicht gelöscht werden:\n{e}")
             return
