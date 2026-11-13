@@ -180,6 +180,31 @@ def druecke(kombi: str) -> None:
         _send(inputs)
 
 
+INPUT_MOUSE, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP = 0, 0x0002, 0x0004
+
+
+def _lies_maus() -> tuple[int, int]:
+    p = wintypes.POINT()
+    user32.GetCursorPos(ctypes.byref(p))
+    return p.x, p.y
+
+
+def _setze_maus(x: int, y: int) -> None:
+    user32.SetCursorPos(int(x), int(y))
+
+
+def klicke(x: int, y: int) -> None:
+    """Linksklick an Bildschirmposition (x, y); der Mauszeiger kommt danach an seine alte Stelle zurück."""
+    warte_bis_tasten_los()  # sonst wird aus dem Klick bei gehaltenem Strg ein Strg+Klick
+    alt = _lies_maus()
+    _setze_maus(x, y)
+    try:
+        _send([INPUT(type=INPUT_MOUSE, u=_U(mi=MOUSEINPUT(dwFlags=MOUSEEVENTF_LEFTDOWN))),
+               INPUT(type=INPUT_MOUSE, u=_U(mi=MOUSEINPUT(dwFlags=MOUSEEVENTF_LEFTUP)))])
+    finally:
+        _setze_maus(*alt)
+
+
 def fuege_ein(text: str, modus: str) -> None:
     warte_bis_tasten_los()
     if modus == "zwischenablage":

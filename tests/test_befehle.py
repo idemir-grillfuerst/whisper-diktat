@@ -169,6 +169,22 @@ def test_druecke():
         inserter._send, inserter.warte_bis_tasten_los = alt
 
 
+def test_klicke():
+    from diktat import inserter
+    pos, gesendet = [], []
+    alt = inserter._send, inserter.warte_bis_tasten_los, getattr(inserter, "_setze_maus", None),         getattr(inserter, "_lies_maus", None)
+    inserter._send = lambda inputs: gesendet.append([(i.type, i.u.mi.dwFlags) for i in inputs])
+    inserter.warte_bis_tasten_los = lambda *a: None
+    inserter._setze_maus = lambda x, y: pos.append((x, y))
+    inserter._lies_maus = lambda: (7, 8)
+    try:
+        inserter.klicke(100, 200)
+        pruefe("Maus hin und zurück", pos == [(100, 200), (7, 8)])
+        pruefe("Linksklick", gesendet == [[(0, 0x0002), (0, 0x0004)]])
+    finally:
+        inserter._send, inserter.warte_bis_tasten_los, inserter._setze_maus, inserter._lies_maus = alt
+
+
 def test_gib_aus():
     import diktat.__main__ as m
     alt = m.fuege_ein, m.druecke, m.os.startfile
@@ -211,6 +227,7 @@ if __name__ == "__main__":
         test_config_enter(Path(t))
     test_vorlage()
     test_druecke()
+    test_klicke()
     test_gib_aus()
     print(f"\n{len(FEHLER)} Fehler" + (": " + ", ".join(FEHLER) if FEHLER else ""))
     sys.exit(1 if FEHLER else 0)
