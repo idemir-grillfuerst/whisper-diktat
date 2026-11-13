@@ -102,6 +102,28 @@ def test_config_enter(tmp):
     pruefe("enter aus", lade_config(c).enter_woerter == [])
 
 
+def test_druecke():
+    from diktat import inserter
+    alt = inserter._send, inserter.warte_bis_tasten_los
+    gesendet, gewartet = [], []
+    inserter._send = lambda inputs: gesendet.append([(i.u.ki.wVk, i.u.ki.dwFlags) for i in inputs])
+    inserter.warte_bis_tasten_los = lambda *a: gewartet.append(1)
+    try:
+        inserter.druecke("ctrl+z")
+        pruefe("Strg+Z", gesendet[-1] == [(0x11, 0), (0x5A, 0), (0x5A, 2), (0x11, 2)])
+        inserter.druecke("shift+enter shift+enter")
+        pruefe("Folge = 2 Sendungen", len(gesendet) == 3)
+        inserter.druecke("left")
+        pruefe("Pfeil erweitert", gesendet[-1][0] == (0x25, 1))
+        inserter.druecke("win+shift+s")
+        pruefe("Modifier in umgekehrter Reihenfolge hoch",
+               [v for v, f in gesendet[-1]] == [0x5B, 0x10, 0x53, 0x53, 0x10, 0x5B]
+               or [v for v, f in gesendet[-1]] == [0x10, 0x5B, 0x53, 0x53, 0x5B, 0x10])
+        pruefe("wartet auf losgelassene Tasten", len(gewartet) == 4)
+    finally:
+        inserter._send, inserter.warte_bis_tasten_los = alt
+
+
 if __name__ == "__main__":
     test_normalisiere()
     test_parse()
@@ -110,5 +132,6 @@ if __name__ == "__main__":
         test_laden(Path(t))
         test_config_enter(Path(t))
     test_vorlage()
+    test_druecke()
     print(f"\n{len(FEHLER)} Fehler" + (": " + ", ".join(FEHLER) if FEHLER else ""))
     sys.exit(1 if FEHLER else 0)

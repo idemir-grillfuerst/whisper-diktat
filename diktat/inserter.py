@@ -11,7 +11,7 @@ import logging
 import time
 from ctypes import wintypes
 
-from .hotkey import gedrueckte_modifier
+from .hotkey import gedrueckte_modifier, parse_shortcut
 
 log = logging.getLogger(__name__)
 user32 = ctypes.WinDLL("user32", use_last_error=True)
@@ -156,6 +156,28 @@ def ueber_zwischenablage(text: str) -> None:
            _key(VK_CONTROL, flags=KEYEVENTF_KEYUP)])
     time.sleep(0.3)  # Zielprogramm liest die Zwischenablage verzögert
     _setze_text(alt)
+
+
+MODIFIER_VK = {"ctrl": 0x11, "shift": 0x10, "alt": 0x12, "win": 0x5B}
+MODIFIER_REIHENFOLGE = ("ctrl", "alt", "shift", "win")
+# Diese Tasten brauchen das Erweitert-Flag, sonst kommen sie bei manchen Programmen als Ziffernblock an
+ERWEITERT = {0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x2D, 0x2E}
+KEYEVENTF_EXTENDEDKEY = 0x0001
+
+
+def druecke(kombi: str) -> None:
+    """Tastenkombination(en) drücken, z. B. "ctrl+z" oder "shift+enter shift+enter" (nacheinander)."""
+    warte_bis_tasten_los()  # sonst wird aus Enter bei noch gehaltenem Strg ein Strg+Enter
+    for teil in kombi.split():
+        mods, key = parse_shortcut(teil)
+        if key is None:
+            raise ValueError(f"'{teil}': es fehlt eine normale Taste")
+        vks = [MODIFIER_VK[m] for m in MODIFIER_REIHENFOLGE if m in mods]
+        flag = KEYEVENTF_EXTENDEDKEY if key in ERWEITERT else 0
+        inputs = [_key(vk) for vk in vks]
+        inputs += [_key(key, flags=flag), _key(key, flags=flag | KEYEVENTF_KEYUP)]
+        inputs += [_key(vk, flags=KEYEVENTF_KEYUP) for vk in reversed(vks)]
+        _send(inputs)
 
 
 def fuege_ein(text: str, modus: str) -> None:
