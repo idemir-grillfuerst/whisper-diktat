@@ -228,11 +228,84 @@ def test_menue():
            any(e.default for e in menue.items if str(e.text) == "Einstellungen …"))
 
 
+def temp_dateien(tmp: Path) -> dict:
+    """Kopien der vier Beispieldateien, damit Rauchtests nie die echten Dateien anfassen."""
+    dateien = {}
+    for name, vorlage in (("config", "config.beispiel.toml"), ("befehle", "befehle.beispiel.toml"),
+                          ("textfelder", "textfelder.beispiel.toml"), ("fachwoerter", "fachwoerter.beispiel.txt")):
+        d = tmp / vorlage.replace(".beispiel", "")
+        d.write_text((PROJEKT / vorlage).read_text(encoding="utf-8"), encoding="utf-8")
+        dateien[name] = d
+    return dateien
+
+
+def test_tasten():
+    from diktat.einstellungen.dialoge import kombi_aus, taste_aus_keysym
+    pruefe("Taste: Buchstabe", taste_aus_keysym("z") == "z" and taste_aus_keysym("Z") == "z")
+    pruefe("Taste: Sondertasten", taste_aus_keysym("Return") == "enter" and taste_aus_keysym("Prior") == "pageup"
+           and taste_aus_keysym("period") == "." and taste_aus_keysym("F5") == "f5")
+    pruefe("Taste: Zusatztaste ist keine Taste", taste_aus_keysym("Control_L") is None)
+    pruefe("Kombi", kombi_aus({"shift", "ctrl"}, "t") == "ctrl+shift+t" and kombi_aus({"ctrl", "win"}, None)
+           == "ctrl+win" and kombi_aus(set(), "f9") == "f9")
+
+
+def test_fenster_rauch(tmp):
+    import tkinter as tk
+    from diktat.einstellungen import fenster as fm
+    from diktat.einstellungen.__main__ import _mutex_belegt
+    pruefe("Mutex: erstes Mal frei, zweites Mal belegt",
+           _mutex_belegt("Local\\whisper-diktat-test-mutex") is False
+           and _mutex_belegt("Local\\whisper-diktat-test-mutex") is True)
+    dateien = temp_dateien(tmp)
+    vorher = dateien["config"].read_text(encoding="utf-8")
+    root = tk.Tk()
+    root.withdraw()
+    try:
+        f = fm.Fenster(root, dateien=dateien)
+        f.frage = lambda titel, text: False       # keine echten Rückfragen im Test
+        f.zeige_fehler = lambda text: fehler.append(text)
+        fehler = []
+        for r in f.reiter:
+            f.notebook.select(r)
+            root.update_idletasks()
+        pruefe("Fenster: Reiter da", [r.titel for r in f.reiter][:1] == ["Allgemein"]
+               and any(r.titel == "Info" for r in f.reiter))
+        a = next(r for r in f.reiter if r.titel == "Allgemein")
+        pruefe("Allgemein: nichts geändert", not a.geaendert())
+        a.var["modus"].set("halten")
+        pruefe("Allgemein: geändert erkannt", a.geaendert() and "•" in f.notebook.tab(a, "text"))
+        pruefe("Übernehmen klappt", f.uebernehmen())
+        nachher = dateien["config"].read_text(encoding="utf-8")
+        pruefe("Datei: Bedienung geschrieben", 'modus = "halten"' in nachher)
+        pruefe("Datei: Kommentare unverändert", [z for z in vorher.splitlines() if z.startswith("#")]
+               == [z for z in nachher.splitlines() if z.startswith("#")])
+        pruefe("nach Übernehmen nicht mehr geändert", not a.geaendert() and "•" not in f.notebook.tab(a, "text"))
+        a.var["max_aufnahme_s"].set("abc")
+        pruefe("ungültige Zahl: Fehler", "max_aufnahme_s" in a.fehler())
+        pruefe("ungültig: Übernehmen schreibt nichts", not f.uebernehmen()
+               and dateien["config"].read_text(encoding="utf-8") == nachher and fehler)
+        a.var["max_aufnahme_s"].set("300")
+        a.var["shortcut"].set("ctrl+win")
+        neustart = []
+        f.neustart_anbieten = lambda felder: neustart.extend(felder)
+        pruefe("Shortcut übernommen", f.uebernehmen() and 'shortcut = "ctrl+win"' in
+               dateien["config"].read_text(encoding="utf-8"))
+        pruefe("Shortcut: Neustart angeboten", neustart == ["shortcut"])
+        a.var["enter"].set("senden, enter")
+        pruefe("Absenden-Wörter als Liste", f.uebernehmen() and 'enter = ["senden", "enter"]' in
+               dateien["config"].read_text(encoding="utf-8"))
+    finally:
+        root.destroy()
+
+
 if __name__ == "__main__":
     test_tomltext()
     test_daten()
+    test_tasten()
     with tempfile.TemporaryDirectory() as t:
         test_tool_seite(Path(t))
     test_menue()
+    with tempfile.TemporaryDirectory() as t:
+        test_fenster_rauch(Path(t))
     print(f"\n{len(FEHLER)} Fehler" + (": " + ", ".join(FEHLER) if FEHLER else ""))
     sys.exit(1 if FEHLER else 0)

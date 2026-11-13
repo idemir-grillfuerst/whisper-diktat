@@ -5,4 +5,5 @@ numpy
 sounddevice                  # Mikrofon
 pystray                      # Symbol in der Taskleiste
 pillow
+sv-ttk                       # Windows-11-Aussehen des Einstellungsfensters
 comtypes                     # Windows-Bedienungshilfe (Sprachbefehl „Textfeld“)

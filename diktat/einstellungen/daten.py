@@ -40,7 +40,7 @@ FELDER: dict[str, Feld] = {
         "text", neustart=True, standard="ctrl+y"),
     "modus": Feld(
         "allgemein", "modus", "Bedienung",
-        "Wie die Tastenkombination wirkt.", "wahl",
+        "Gilt für die Tastenkombination. Die Maustaste diktiert immer, solange sie gehalten wird.", "wahl",
         (("halten", "Halten – gedrückt halten diktiert, loslassen beendet"),
          ("umschalten", "Umschalten – einmal tippen startet, nochmal tippen beendet"),
          ("beides", "Beides – lang halten diktiert, kurz tippen startet eine Daueraufnahme")),
