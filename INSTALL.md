@@ -33,7 +33,7 @@ rechts in der Taskleiste erscheint ein Mikrofon-Symbol. Danach: **Strg+Y halten,
    `%USERPROFILE%\.venvs\whisper` an. Kurze Pfade mit Absicht, weil Windows bei über 260 Zeichen scheitert.
 4. Installiert die Pakete aus `requirements.txt`.
 5. Ruft `python -m diktat.einrichten` auf:
-   - legt `config.toml` und `fachwoerter.txt` aus den Vorlagen an (bestehende bleiben unverändert),
+   - legt `config.toml`, `fachwoerter.txt` und `befehle.toml` aus den Vorlagen an (bestehende bleiben unverändert),
    - zeigt die gefundenen Recheneinheiten (Grafik/NPU/CPU) und Mikrofone,
    - lädt das Whisper-Modell von Hugging Face (ca. 1–2 GB, einmalig),
    - legt die Verknüpfung „Whisper Diktat starten“ im Projektordner und auf dem Desktop an,
@@ -59,7 +59,7 @@ Vorher das Tool beenden: Rechtsklick auf das Symbol → „Beenden“. Dann:
 
 - **Mit Git:** `git pull`
 - **Mit ZIP:** die neue ZIP über den bestehenden Ordner entpacken und vorhandene Dateien ersetzen. Die
-  persönlichen Dateien `config.toml` und `fachwoerter.txt` sind nicht in der ZIP und bleiben erhalten.
+  persönlichen Dateien `config.toml`, `fachwoerter.txt` und `befehle.toml` sind nicht in der ZIP und bleiben erhalten.
 
 Danach erneut ausführen:
 
@@ -104,7 +104,7 @@ Wenn der Nutzer dich bittet, whisper-diktat zu installieren:
    **Keine echten Tastatureingaben simulieren:** Sie würden im aktiven Fenster des Nutzers landen.
 
 **Regeln:**
-- `config.toml` und `fachwoerter.txt` gehören dem Nutzer. Nicht überschreiben, nur auf Wunsch ändern.
+- `config.toml`, `fachwoerter.txt` und `befehle.toml` gehören dem Nutzer. Nicht überschreiben, nur auf Wunsch ändern.
 - Keine Adminrechte anfordern. Es ist keine nötig.
 - Nichts außerhalb von Projektordner, `%USERPROFILE%\.venvs`, Hugging-Face-Cache, Desktop-Verknüpfung und
   Aufgabe „whisper-diktat“ anlegen.

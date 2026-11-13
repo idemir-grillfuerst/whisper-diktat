@@ -12,8 +12,9 @@ Rechner nie.
 - Projektwissen, Entscheidungen und Messergebnisse in `MEMORY.md` in diesem Ordner festhalten (nicht in Git),
   **nicht** im globalen Claude-Memory unter `~/.claude`.
 - Keine echten Tastatureingaben (SendInput) in automatischen Tests: Sie landen im aktiven Fenster des Nutzers.
-- Keine persönlichen Daten ins Repo: `config.toml`, `fachwoerter.txt`, Aufnahmen, Logs und Notizen sind in
-  `.gitignore`. Neue Standardwerte gehören in die Vorlagen `config.beispiel.toml` / `fachwoerter.beispiel.txt`.
+- Keine persönlichen Daten ins Repo: `config.toml`, `fachwoerter.txt`, `befehle.toml`, Aufnahmen, Logs und
+  Notizen sind in `.gitignore`. Neue Standardwerte gehören in die Vorlagen `config.beispiel.toml` /
+  `fachwoerter.beispiel.txt` / `befehle.beispiel.toml`.
 
 ## Umgebung
 - Python 3.12 in `%USERPROFILE%\.venvs\whisper` (Python selbst in `%USERPROFILE%\.venvs\python`), angelegt von
@@ -28,6 +29,10 @@ Rechner nie.
   - `recorder.py`: Mikrofon 16 kHz mono, nur während der Aufnahme offen
   - `engine.py`: OpenVINO-WhisperPipeline in einem **eigenen Prozess** (wegen GIL/Hook-Timeout und Treiberabstürzen)
   - `inserter.py`: Text tippen (SendInput Unicode) oder über die Zwischenablage einfügen
+    sowie Tastenkombinationen drücken (`druecke`, für Sprachbefehle)
+  - `befehle.py`: Sprachbefehle. „… Enter“ am Diktat-Ende drückt Enter (`[befehle] enter` in `config.toml`);
+    ist das ganze Diktat ein Satz aus `befehle.toml` („öffne Outlook“, „rückgängig“), wird statt Text eine Aktion
+    ausgeführt (Seite/Programm öffnen per `os.startfile` oder Tasten). Datei wird bei Änderung neu geladen.
   - `tray.py`: Taskleisten-Symbol (pystray). Farben: blau = lädt, grau = bereit, rot = Aufnahme, gelb = transkribiert, schwarz = Fehler
   - `__main__.py`: App, Threads (Ereignisse, Transkription, Wartung), Bereinigung von Halluzinationen,
     Log in `logs/diktat.log`, harte Abstürze in `logs/absturz.log`. Exit-Codes: 0 = Beenden, 3 = läuft schon, 4 = Neustart
@@ -35,13 +40,13 @@ Rechner nie.
   - `autostart.py`: Aufgabe „whisper-diktat“ in der Windows-Aufgabenplanung (Anmeldung, Entsperren, alle 10 min),
     an/aus mit `python -m diktat.autostart an|aus|status`. Der alte HKCU\Run-Eintrag wird dabei entfernt.
   - `geraete.py`: vorhandene Recheneinheiten (OpenVINO `available_devices`) und Mikrofone (MME, Namen statt Nummern)
-  - `config.py`: lädt `config.toml`/`fachwoerter.txt`, legt sie beim ersten Zugriff aus den Vorlagen an
+  - `config.py`: lädt `config.toml`/`fachwoerter.txt`/`befehle.toml`, legt sie beim ersten Zugriff aus den Vorlagen an
   - `einrichten.py`: Einrichtung nach der Paketinstallation (Dateien, Geräte, Modell, Verknüpfungen, Autostart)
 - `install.ps1`: komplette Installation für den aktuellen Benutzer, siehe `INSTALL.md`.
 - `start.pyw` → Wächter → Tool. Die Verknüpfung `Whisper Diktat starten.lnk` legt `einrichten.py` an.
 - `config.toml`: Shortcut, `[modell] name` (turbo/large-v3) + `geraet` (auto/GPU/NPU/CPU), `mikrofon` ("" = Windows-
   Standard), Einfügemodus. Alte Dateien mit `[modell] stufe` werden beim Laden übersetzt. `fachwoerter.txt`: initial_prompt.
-- `tests/`: `test_kern`, `test_phase2 [--engine]`, `test_phase3`, `test_phase4 [--engine]`, `test_autostart`,
+- `tests/`: `test_kern`, `test_befehle`, `test_phase2 [--engine]`, `test_phase3`, `test_phase4 [--engine]`, `test_autostart`,
   `test_geraete`, `test_einrichten` (jeweils `python -m tests.<name>`), ohne echte Tastatureingaben. Außerdem
   `mikro_probe` (Stille-Messung am Mikrofon). Achtung: test_phase3 schreibt in `logs/waechter.log`.
   `--engine` braucht `requirements-test.txt` und eine eigene Testaufnahme `whisper-test/test_de.wav` (nicht in Git).
