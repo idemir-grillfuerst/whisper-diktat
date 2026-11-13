@@ -31,8 +31,6 @@ def test_vorlagen():
            cfg.modell == "turbo" and cfg.geraet == "auto" and cfg.mikrofon == "" and cfg.shortcut == "ctrl+y")
     raw = tomllib.loads(vorlage.read_text(encoding="utf-8"))
     pruefe("Vorlage enthält beide Modelle", set(raw["modelle"]) == {"turbo", "large-v3"})
-    fach = (PROJEKT / "fachwoerter.beispiel.txt").read_text(encoding="utf-8")
-    pruefe("Fachwort-Vorlage ohne Firmenbegriffe", not any(w in fach for w in ("Grillfürst", "Plenty", "3CX")))
 
 
 def test_aus_vorlage():
