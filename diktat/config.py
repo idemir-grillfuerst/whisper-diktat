@@ -79,15 +79,18 @@ class Config:
     enter_woerter: list        # Diktat endet auf eines davon -> Wort weg, danach Enter ([] = aus)
 
 
+STANDARD_ENTER = ["enter", "senden"]
+
+
 def _enter_woerter(befehle) -> list[str]:
     """[befehle] enter: Liste von Wörtern. Ein einzelner Text gilt als ein Wort, alles andere als Standard."""
-    wert = befehle.get("enter", ["enter"]) if isinstance(befehle, dict) else ["enter"]
+    wert = befehle.get("enter", STANDARD_ENTER) if isinstance(befehle, dict) else STANDARD_ENTER
     if isinstance(wert, str):
         return [wert]
     if isinstance(wert, list):
         return [str(w) for w in wert]
     log.warning("config.toml: [befehle] enter muss eine Liste sein, z. B. [\"enter\"] – nehme den Standard")
-    return ["enter"]
+    return list(STANDARD_ENTER)
 
 
 def lade_config(datei=None) -> Config:

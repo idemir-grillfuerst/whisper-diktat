@@ -42,6 +42,7 @@ Rechner nie.
   - `geraete.py`: vorhandene Recheneinheiten (OpenVINO `available_devices`) und Mikrofone (MME, Namen statt Nummern)
   - `config.py`: lädt `config.toml`/`fachwoerter.txt`/`befehle.toml`, legt sie beim ersten Zugriff aus den Vorlagen an
   - `einrichten.py`: Einrichtung nach der Paketinstallation (Dateien, Geräte, Modell, Verknüpfungen, Autostart)
+- `docs/SPRACHBEFEHLE.md`: Anleitung für Nutzer (Befehle, eigene Einträge). Bei neuen Befehlen mitpflegen.
 - `install.ps1`: komplette Installation für den aktuellen Benutzer, siehe `INSTALL.md`.
 - `start.pyw` → Wächter → Tool. Die Verknüpfung `Whisper Diktat starten.lnk` legt `einrichten.py` an.
 - `config.toml`: Shortcut, `[modell] name` (turbo/large-v3) + `geraet` (auto/GPU/NPU/CPU), `mikrofon` ("" = Windows-
