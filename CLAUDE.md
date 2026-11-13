@@ -35,6 +35,7 @@ Rechner nie.
     ausgeführt (Seite/Programm öffnen per `os.startfile` oder Tasten). Datei wird bei Änderung neu geladen.
     `[aktionen]` = eingebaute Aktionen (textfeld, textfeld_merken, textfeld_vergessen); „Textfeld, …“ als Vorsilbe.
   - `textfeld.py`: Sprachbefehl „Textfeld“ (Bewertung der Eingabefelder, Regeln in `textfelder.toml`, Aktionen)
+  - `marker.py`: kurzes Bestätigungszeichen am Bildschirm (Haken/Kreuz, durchklickbar), Probe `python -m diktat.marker`
   - `uia.py`: Windows-Bedienungshilfe (UI Automation über comtypes) und Fensterabfragen, nur für `textfeld.py`.
     Chromium/Electron liefern beim ersten Zugriff keine Felder, deshalb wird beim Aufnahmestart vorgewärmt.
   - `tray.py`: Taskleisten-Symbol (pystray). Farben: blau = lädt, grau = bereit, rot = Aufnahme, gelb = transkribiert, schwarz = Fehler

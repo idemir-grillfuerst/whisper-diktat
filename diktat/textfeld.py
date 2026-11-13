@@ -15,7 +15,7 @@ import tomllib
 from dataclasses import dataclass, fields
 from pathlib import Path
 
-from . import inserter, uia
+from . import inserter, marker, uia
 from .befehle import pruefe_tasten
 from .config import TEXTFELDER_DATEI, _toml_text, aus_vorlage
 from .uia import UiaFehlt
@@ -265,6 +265,22 @@ def _schreibe(schl: str, regel: Regel | None) -> None:
     _CACHE.pop(datei, None)
 
 
+def zeichen_fuer_feld(rect: tuple[int, int, int, int]) -> tuple[int, int]:
+    """Wo das Bestätigungszeichen an einem Feld sitzt: rechts innen, bei schmalen Feldern in der Mitte."""
+    l, o, r, u = rect
+    return (r - 24 if r - l > 80 else (l + r) // 2), (o + u) // 2
+
+
+def _markiere(pos: tuple[int, int] | None, ok: bool) -> None:
+    """Kurzes Zeichen am Bildschirm (Haken/Kreuz). Darf nie eine Aktion scheitern lassen."""
+    if pos is None:
+        return
+    try:
+        marker.zeige(pos[0], pos[1], ok)
+    except Exception:  # noqa: BLE001
+        log.exception("Bestätigungszeichen ging nicht")
+
+
 def _fokus_setzen(el, typ: str) -> None:
     if not uia.fokussiere(el):
         inserter.klicke(*uia.mitte(el))
@@ -300,6 +316,7 @@ def textfeld(frist_s: float = 1.5, takt_s: float = 0.3) -> Antwort:
                 break
             if time.monotonic() >= ende:
                 log.info("Kein Textfeld gefunden (%s, %d Kandidaten)", schl, len(liste))
+                _markiere(((rect[0] + rect[2]) // 2, (rect[1] + rect[3]) // 2), False)
                 return Antwort(False, f"Kein Textfeld gefunden ({schl})")
             time.sleep(takt_s)
         kand, el = treffer
@@ -315,39 +332,49 @@ def textfeld(frist_s: float = 1.5, takt_s: float = 0.3) -> Antwort:
 
 def textfeld_merken() -> Antwort:
     """Feld unter der Maus (ersatzweise die Mausposition) als Regel für Programm/Website unter der Maus merken."""
+    pos = None
     try:
         hwnd = uia.fenster_unter_maus()
         schl = _schluessel_fuer(hwnd)
         unter = uia.kandidat_unter_maus()
         regel = regel_aus_kandidat(unter[0]) if unter else None
-        if regel is None:
+        if regel is not None:
+            pos = zeichen_fuer_feld(unter[0].rect)
+            was = regel.name or regel.automation_id
+        else:
             mx, my = uia.maus_position()
+            pos = (mx, my)
             l, o, r, u = uia.fenster_rect(hwnd)
             if r <= l or u <= o:
+                _markiere(pos, False)
                 return Antwort(False, f"Textfeld merken ging nicht: Fenster unbekannt ({schl})")
             regel = Regel(x=round(min(1.0, max(0.0, (mx - l) / (r - l))), 4),
                           y=round(min(1.0, max(0.0, (my - o) / (u - o))), 4))
             was = f"Position {regel.x:.0%} / {regel.y:.0%}"
-        else:
-            was = regel.name or regel.automation_id
         _schreibe(schl, regel)
         log.info("Textfeld gemerkt für %s: %s", schl, regel)
+        _markiere(pos, True)
         return Antwort(True, f"Textfeld gemerkt für {schl}: {was}")
     except UiaFehlt:
         return Antwort(False, OHNE_COMTYPES)
     except Exception as e:  # noqa: BLE001
         log.exception("Textfeld merken fehlgeschlagen")
+        _markiere(pos, False)
         return Antwort(False, f"Textfeld merken ging nicht: {e}"[:100])
 
 
 def textfeld_vergessen() -> Antwort:
     """Regel für Programm/Website des Fensters vorne löschen."""
+    pos = None
     try:
+        pos = uia.maus_position()
         schl = _schluessel_fuer(uia.fenster_vorne())
         if schl not in _regeln():
+            _markiere(pos, False)
             return Antwort(False, f"Keine Regel für {schl}")
         _schreibe(schl, None)
         log.info("Textfeld-Regel gelöscht für %s", schl)
+        _markiere(pos, True)
         return Antwort(True, f"Textfeld-Regel gelöscht für {schl}")
     except UiaFehlt:
         return Antwort(False, OHNE_COMTYPES)

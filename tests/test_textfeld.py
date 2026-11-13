@@ -5,6 +5,7 @@ Aufruf (im Projektordner):
 """
 import sys
 import tempfile
+import types
 from pathlib import Path
 
 from diktat import PROJEKT
@@ -12,6 +13,7 @@ from diktat.textfeld import (Kandidat, Regel, parse_regeln, passt, regel_aus_kan
                              waehle, wechselnde_id)
 
 FEHLER = []
+MARKIERT = []   # (x, y, ok) der Bestätigungszeichen am Bildschirm
 
 
 def pruefe(name, bedingung):
@@ -175,13 +177,15 @@ def mit_attrappen(regeldatei):
     import diktat.inserter as ins
     import diktat.textfeld as tf
     gedrueckt, geklickt = [], []
-    alt = (getattr(ins, "druecke"), getattr(ins, "klicke", None), tf.REGEL_DATEI, tf.uia)
+    alt = (getattr(ins, "druecke"), getattr(ins, "klicke", None), tf.REGEL_DATEI, tf.uia, getattr(tf, "marker", None))
     ins.druecke = gedrueckt.append
     ins.klicke = lambda x, y: geklickt.append((x, y))
     tf.REGEL_DATEI = regeldatei
+    MARKIERT.clear()
+    tf.marker = types.SimpleNamespace(zeige=lambda x, y, ok: MARKIERT.append((x, y, ok)))
 
     def aufraeumen():
-        ins.druecke, ins.klicke, tf.REGEL_DATEI, tf.uia = alt
+        ins.druecke, ins.klicke, tf.REGEL_DATEI, tf.uia, tf.marker = alt
     return gedrueckt, geklickt, aufraeumen
 
 
@@ -307,6 +311,52 @@ def test_dpi():
     pruefe("UIA-Thread rechnet in echten Pixeln (Per-Monitor v2)", ergebnis.get("pmv2") is True)
 
 
+def test_marker(tmp):
+    """Bestätigungszeichen: Haken bei merken/vergessen, Kreuz bei Fehlschlag, nichts bei erfolgreichem „Textfeld“."""
+    import diktat.textfeld as tf
+    regeldatei = tmp / "marker.toml"
+    _neu(regeldatei, "")
+    gedrueckt, geklickt, aufraeumen = mit_attrappen(regeldatei)
+    try:
+        FakeUia(prozess="claude", kandidaten_folge=[[(k("Prompt"), "E1")]])
+        tf.textfeld(frist_s=0.05, takt_s=0.01)
+        pruefe("Textfeld klappt: kein Zeichen", MARKIERT == [])
+        FakeUia(prozess="claude", kandidaten_folge=[[]], rect=(0, 0, 1000, 800))
+        tf.textfeld(frist_s=0.05, takt_s=0.01)
+        pruefe("Textfeld scheitert: Kreuz in der Fenstermitte", MARKIERT == [(500, 400, False)])
+        MARKIERT.clear()
+        FakeUia(prozess="ms-teams", unter_maus=(k("Nachricht eingeben", rect=(100, 900, 900, 950)), "E"))
+        tf.textfeld_merken()
+        pruefe("merken mit Feld: Haken rechts im Feld", MARKIERT == [(876, 925, True)])
+        MARKIERT.clear()
+        FakeUia(prozess="ms-teams", unter_maus=(k("Klein", rect=(100, 900, 160, 950)), "E"))
+        tf.textfeld_merken()
+        pruefe("schmales Feld: Haken in der Mitte", MARKIERT == [(130, 925, True)])
+        MARKIERT.clear()
+        FakeUia(prozess="greyhound", unter_maus=None, maus=(350, 900), rect=(100, 0, 1100, 1000))
+        tf.textfeld_merken()
+        pruefe("merken ohne Feld: Haken an der Maus", MARKIERT == [(350, 900, True)])
+        MARKIERT.clear()
+        FakeUia(prozess="greyhound", maus=(10, 20))
+        tf.textfeld_vergessen()
+        pruefe("vergessen: Haken an der Maus", MARKIERT == [(10, 20, True)])
+        MARKIERT.clear()
+        tf.textfeld_vergessen()
+        pruefe("nichts zu vergessen: Kreuz an der Maus", MARKIERT == [(10, 20, False)])
+        MARKIERT.clear()
+        FakeUia(fehlt=True)
+        tf.textfeld_merken()
+        pruefe("ohne comtypes: kein Zeichen (keine Position bekannt), kein Absturz", MARKIERT == [])
+
+        def kaputt(x, y, ok):
+            raise OSError("kein Fenster")
+        tf.marker = types.SimpleNamespace(zeige=kaputt)
+        FakeUia(prozess="greyhound", maus=(10, 20))
+        pruefe("Zeichen kaputt: Aktion klappt trotzdem", tf.textfeld_merken().ok)
+    finally:
+        aufraeumen()
+
+
 if __name__ == "__main__":
     test_wahl()
     test_schluessel()
@@ -318,5 +368,6 @@ if __name__ == "__main__":
         test_aktion_merken(Path(t))
         test_ohne_comtypes(Path(t))
         test_vorwaermen(Path(t))
+        test_marker(Path(t))
     print(f"\n{len(FEHLER)} Fehler" + (": " + ", ".join(FEHLER) if FEHLER else ""))
     sys.exit(1 if FEHLER else 0)

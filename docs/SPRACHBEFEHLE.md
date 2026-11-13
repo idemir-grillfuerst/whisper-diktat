@@ -61,6 +61,9 @@ eigenen Einträge.
   Text. Nach „Textfeld,“ wird nur noch auf „Senden“ am Ende geachtet: „Textfeld, rückgängig“ schreibt das Wort hin.
 - Findet das Tool kein Feld, kommt eine **Windows-Meldung** und es wird **nichts** eingefügt, damit der Text nicht im
   falschen Programm landet. Der diktierte Text steht dann im Log.
+- **Bestätigung am Bildschirm:** Bei „merke Textfeld“ und „vergiss Textfeld“ leuchtet kurz ein **grüner Haken** auf,
+  am gemerkten Feld bzw. am Mauszeiger. Klappt etwas nicht (auch wenn „Textfeld“ kein Feld findet), erscheint ein
+  **rotes Kreuz**. Das Zeichen ist durchklickbar und verschwindet nach 1,5 s.
 - Gemerkte Felder stehen in `textfelder.toml` (Projektordner). Dort kann man auch von Hand eine Taste oder
   Klickposition hinterlegen, siehe Kommentare in der Datei.
 
