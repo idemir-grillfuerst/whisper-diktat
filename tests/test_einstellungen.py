@@ -419,6 +419,44 @@ def test_befehle_reiter(tmp):
         root.destroy()
 
 
+def test_textfelder_fachwoerter(tmp):
+    import tkinter as tk
+    from diktat.einstellungen import fenster as fm
+    from diktat.textfeld import parse_regeln
+    dateien = temp_dateien(tmp)
+    dateien["textfelder"].write_text('# Kopf\n[regeln."ms-teams"]\ntaste = "alt+shift+c"\n\n'
+                                     '[regeln."chrome|claude.ai"]\nname = "Prompt"\n', encoding="utf-8")
+    root = tk.Tk()
+    root.withdraw()
+    try:
+        f = fm.Fenster(root, dateien=dateien)
+        f.frage = lambda *a: False
+        f.zeige_fehler = lambda text: None
+        tf = next(r for r in f.reiter if r.titel == "Textfelder")
+        fw = next(r for r in f.reiter if r.titel == "Fachwörter")
+        for r in (tf, fw):
+            f.notebook.select(r)
+            root.update_idletasks()
+        pruefe("Textfelder: Liste", len(tf.liste.get_children()) == 2)
+        tf.bestaetigen = lambda text: True
+        tf.loeschen("ms-teams")
+        neu = dateien["textfelder"].read_text(encoding="utf-8")
+        pruefe("Textfelder: gelöscht, Kopf bleibt", list(parse_regeln(neu)) == ["chrome|claude.ai"]
+               and neu.startswith("# Kopf") and len(tf.liste.get_children()) == 1)
+        vorher = dateien["fachwoerter"].read_text(encoding="utf-8")
+        pruefe("Fachwörter: nichts geändert", not fw.geaendert())
+        fw.text.insert("end", "\nGrillfürst\n")
+        fw.text.event_generate("<<Modified>>")
+        root.update()
+        pruefe("Fachwörter: geändert erkannt", fw.geaendert() and "/" in fw.zaehler.cget("text"))
+        pruefe("Fachwörter: übernommen", f.uebernehmen() and "Grillfürst" in
+               dateien["fachwoerter"].read_text(encoding="utf-8") and not fw.geaendert())
+        pruefe("Fachwörter: alter Inhalt bleibt", dateien["fachwoerter"].read_text(encoding="utf-8")
+               .startswith(vorher.rstrip("\n")))
+    finally:
+        root.destroy()
+
+
 if __name__ == "__main__":
     test_tomltext()
     test_daten()
@@ -432,5 +470,7 @@ if __name__ == "__main__":
         test_mikrofon_modell(Path(t))
     with tempfile.TemporaryDirectory() as t:
         test_befehle_reiter(Path(t))
+    with tempfile.TemporaryDirectory() as t:
+        test_textfelder_fachwoerter(Path(t))
     print(f"\n{len(FEHLER)} Fehler" + (": " + ", ".join(FEHLER) if FEHLER else ""))
     sys.exit(1 if FEHLER else 0)

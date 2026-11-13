@@ -278,10 +278,11 @@ class Fenster:
         if fehler:
             self.zeige_fehler("Bitte zuerst korrigieren:\n\n" + "\n".join(f"• {k} – {m}" for k, m in fehler.items()))
             return False
-        geaendert = []
+        geaendert, gespeichert = [], False
         for r in self.reiter:
             if not r.geaendert():
                 continue
+            gespeichert = True
             try:
                 geaendert += r.uebernehmen()
             except (OSError, ValueError) as e:
@@ -290,7 +291,7 @@ class Fenster:
                 return False
             self.markiere(r)
         self.status.configure(text="Gespeichert. Das Tool übernimmt die Änderungen in wenigen Sekunden."
-                              if geaendert else "Keine Änderungen.")
+                              if gespeichert else "Keine Änderungen.")
         spaeter = [n for n in geaendert if n in daten.FELDER and daten.FELDER[n].neustart]
         if spaeter:
             self.neustart_anbieten(spaeter)
