@@ -130,8 +130,109 @@ def test_daten():
            and fachwort_laenge("") == 0)
 
 
+def test_tool_seite(tmp):
+    """Das Diktier-Tool übernimmt geänderte config.toml live (ohne echtes Whisper, Mikrofon oder Fenster)."""
+    import os
+    import time
+    import diktat.__main__ as hm
+    from diktat.config import lade_config_text
+    C = (PROJEKT / "config.beispiel.toml").read_text(encoding="utf-8")
+    aufrufe, meldungen = [], []
+
+    class Rec:
+        mikrofon = ""
+
+        def waehle(self, name):
+            aufrufe.append(("mikrofon", name))
+            self.mikrofon = name
+
+    class Tray:
+        zustand = "bereit"
+
+        def melde(self, text):
+            meldungen.append(text)
+
+        def setze(self, *a, **k):
+            pass
+
+    app = hm.App.__new__(hm.App)
+    app.cfg = lade_config_text(C)
+    app.modell, app.geraet_wahl, app.modus = app.cfg.modell, app.cfg.geraet, app.cfg.modus
+    app.recorder, app.tray = Rec(), Tray()
+    def wechsle(modell=None, geraet_wahl=None):  # wie das echte _wechsle: Zustand der App nachziehen
+        aufrufe.append(("wechsle", modell, geraet_wahl))
+        app.modell, app.geraet_wahl = modell or app.modell, geraet_wahl or app.geraet_wahl
+    app._wechsle = wechsle
+    app._engine_neu_starten = lambda grund, warten=False: aufrufe.append(("engine", grund))
+
+    neu = setze(setze(setze(C, "allgemein", "modus", "halten"), "modell", "name", "large-v3"), "allgemein",
+                "shortcut", "ctrl+win")
+    geaendert = app._config_anwenden(lade_config_text(neu))
+    pruefe("Tool: Bedienung live", app.modus == "halten" and app.cfg.modus == "halten")
+    pruefe("Tool: Modellwechsel", ("wechsle", "large-v3", None) in aufrufe)
+    pruefe("Tool: Shortcut nur gemeldet", "shortcut" in geaendert and app.cfg.shortcut == "ctrl+win")
+    aufrufe.clear()
+    neu = setze(neu, "allgemein", "mikrofon", "Headset")
+    app._config_anwenden(lade_config_text(neu))
+    pruefe("Tool: Mikrofon live", aufrufe == [("mikrofon", "Headset")])
+    aufrufe.clear()
+    neu = setze(neu, "allgemein", "sprache", "en")
+    app._config_anwenden(lade_config_text(neu))
+    pruefe("Tool: Sprache startet Whisper neu", [a[0] for a in aufrufe] == ["engine"] and app.cfg.sprache == "en")
+    aufrufe.clear()
+    app._config_anwenden(lade_config_text(neu))
+    pruefe("Tool: nichts geändert = nichts tun", aufrufe == [])
+
+    datei = tmp / "config.toml"
+    datei.write_text(C, encoding="utf-8")
+    app._config_datei, app._config_mtime = datei, 0.0
+    app._config_pruefen()
+    pruefe("Tool: Datei geladen", app.cfg.modus == "beides")
+    datei.write_text("[allgemein\n", encoding="utf-8")
+    t = time.time() + 5
+    os.utime(datei, (t, t))
+    app._config_pruefen()
+    pruefe("Tool: kaputte Datei -> alte Werte, Meldung", app.cfg.modus == "beides" and meldungen
+           and "config.toml" in meldungen[-1])
+    anzahl = len(meldungen)
+    app._config_pruefen()
+    pruefe("Tool: Meldung nur einmal je Änderung", len(meldungen) == anzahl)
+
+
+def test_menue():
+    import diktat.tray as tr
+
+    class A:
+        pausiert, unter_waechter, modell, geraet_wahl, mikrofon, modus = False, True, "turbo", "auto", "", "beides"
+        modelle, recheneinheiten = {}, []
+
+        def mikrofone(self):
+            return []
+
+        def aktuelles_mikrofon(self):
+            return ""
+
+        def bedien_hinweis(self):
+            return ""
+
+        def autostart_aktiv(self):
+            return False
+
+    t = tr.Tray.__new__(tr.Tray)
+    t.a, t.zustand, t.detail = A(), "bereit", ""
+    menue = t._menue()
+    texte = [str(e.text) for e in menue.items if isinstance(e.text, str)]
+    pruefe("Menü: Einstellungen …", "Einstellungen …" in texte and "Log öffnen" in texte)
+    pruefe("Menü: alte Datei-Einträge weg", not any("bearbeiten" in x or "öffnen …" in x for x in texte))
+    pruefe("Menü: Einstellungen ist Standard (Linksklick)",
+           any(e.default for e in menue.items if str(e.text) == "Einstellungen …"))
+
+
 if __name__ == "__main__":
     test_tomltext()
     test_daten()
+    with tempfile.TemporaryDirectory() as t:
+        test_tool_seite(Path(t))
+    test_menue()
     print(f"\n{len(FEHLER)} Fehler" + (": " + ", ".join(FEHLER) if FEHLER else ""))
     sys.exit(1 if FEHLER else 0)

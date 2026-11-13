@@ -5,6 +5,7 @@ Menü im Taskleisten-Symbol: Pausieren, Modell, Recheneinheit, Mikrofon, Bedienu
 Autostart, Beenden.
 """
 import ctypes
+import dataclasses
 import faulthandler
 import logging
 import os
@@ -22,7 +23,7 @@ import numpy as np
 
 from . import PROJEKT, autostart
 from .waechter import EXIT_LAEUFT_SCHON, EXIT_NEUSTART, EXIT_OK
-from .config import (BEFEHLE_DATEI, CONFIG_DATEI, FACHWORT_DATEI, aus_vorlage, fachwort_prompt, lade_config,
+from .config import (CONFIG_DATEI, Config, fachwort_prompt, lade_config,
                      speichere_modus, speichere_geraet, speichere_mikrofon, speichere_modell)
 from . import geraete
 from .engine import Engine
@@ -36,6 +37,10 @@ from .tray import Tray
 
 log = logging.getLogger("diktat")
 LOG_DATEI = PROJEKT / "logs" / "diktat.log"
+
+# Einstellungsfenster (python -m diktat.einstellungen) und Tool verständigen sich über diese Namen
+NEUSTART_EREIGNIS = "Local\\whisper-diktat-neustart"
+NEUSTART_FELDER = ("shortcut", "maustaste", "mikrofon_offen_halten")  # greifen erst nach einem Neustart
 
 # Typische Whisper-Halluzinationen bei Stille oder am Ende (aus Untertitel-Trainingsdaten)
 HALLUZINATIONEN = re.compile(
@@ -186,6 +191,15 @@ class App:
         self.ausgaben: queue.Queue = queue.Queue()
         # Vorwärmen (UIA-Abfrage beim Aufnahmestart) in eigenem Thread: ein hängendes Fenster hält keine Ausgabe auf
         self.vorwaermung: queue.Queue = queue.Queue(maxsize=1)
+        # Einstellungsfenster: config.toml wird überwacht und live übernommen; Neustart auf Ereignis hin
+        self._config_datei = CONFIG_DATEI
+        try:
+            self._config_mtime = CONFIG_DATEI.stat().st_mtime
+        except OSError:
+            self._config_mtime = 0.0
+        k32 = ctypes.windll.kernel32
+        k32.CreateEventW.restype = ctypes.c_void_p
+        self._neustart_ereignis = k32.CreateEventW(None, True, False, NEUSTART_EREIGNIS)
 
     # --- Modell / Recheneinheit / Mikrofon ---------------------------------------------------
     @property
@@ -403,16 +417,13 @@ class App:
             self.tray.setze("pausiert", "Shortcut aus, Modell entladen")
 
     # --- Menüpunkte ------------------------------------------------------------------------
-    def oeffne_fachwoerter(self):
-        aus_vorlage(FACHWORT_DATEI)
-        oeffne_im_editor(FACHWORT_DATEI)  # wird bei jedem Diktat neu gelesen
-
-    def oeffne_befehle(self):
-        aus_vorlage(BEFEHLE_DATEI)
-        oeffne_im_editor(BEFEHLE_DATEI)  # wird beim nächsten Diktat neu gelesen
-
     def oeffne_einstellungen(self):
-        oeffne_im_editor(CONFIG_DATEI)  # Änderungen greifen nach Neustart
+        """Einstellungsfenster als eigenen Prozess starten (ist es schon offen, kommt es nach vorne)."""
+        try:
+            subprocess.Popen([sys.executable, "-m", "diktat.einstellungen"], cwd=str(PROJEKT),
+                             creationflags=subprocess.CREATE_NO_WINDOW)
+        except OSError:
+            log.exception("Einstellungsfenster konnte nicht gestartet werden")
 
     def oeffne_log(self):
         oeffne_im_editor(LOG_DATEI)
@@ -439,6 +450,66 @@ class App:
         self._autostart = None  # neu abfragen
         self.tray.setze(self.tray.zustand)
 
+    # --- Einstellungen aus config.toml live übernehmen ---------------------------------------
+    def _config_pruefen(self):
+        """Hat jemand (Einstellungsfenster, Editor, Menü) config.toml geändert? Dann neu laden und übernehmen."""
+        try:
+            mtime = self._config_datei.stat().st_mtime
+        except OSError:
+            return
+        if mtime == self._config_mtime:
+            return
+        self._config_mtime = mtime
+        try:
+            neu = lade_config(self._config_datei)
+        except Exception as e:  # noqa: BLE001 – kaputte Datei: mit den alten Werten weiterlaufen
+            log.warning("config.toml fehlerhaft, alte Einstellungen bleiben: %s", e)
+            self.tray.melde(f"config.toml fehlerhaft, alte Einstellungen bleiben: {e}"[:200])
+            return
+        self._config_anwenden(neu)
+
+    def _config_anwenden(self, neu: Config) -> list[str]:
+        """Neue Einstellungen übernehmen, soweit es ohne Neustart geht. Rückgabe: Namen der geänderten Felder."""
+        alt = self.cfg
+        geaendert = [f.name for f in dataclasses.fields(Config) if getattr(alt, f.name) != getattr(neu, f.name)]
+        self.cfg = neu
+        self.modelle = neu.modelle
+        if neu.modus != self.modus:
+            log.info("Bedienung: %s -> %s", self.modus, neu.modus)
+            self.modus = neu.modus
+        if neu.mikrofon != self.recorder.mikrofon:
+            log.info("Mikrofon: %s -> %s", self.recorder.mikrofon or "Windows-Standard",
+                     neu.mikrofon or "Windows-Standard")
+            try:
+                self.recorder.waehle(neu.mikrofon)
+            except Exception:  # noqa: BLE001
+                log.exception("Mikrofon konnte nicht geöffnet werden")
+        modell = neu.modell if neu.modell != self.modell and neu.modell in self.modelle else None
+        geraet = neu.geraet if neu.geraet != self.geraet_wahl else None
+        if modell or geraet:
+            self._wechsle(modell=modell, geraet_wahl=geraet)  # neue Engine nimmt auch eine neue Sprache mit
+        elif alt.sprache != neu.sprache:
+            self._engine_neu_starten(f"Sprache {alt.sprache} -> {neu.sprache}")
+        spaeter = [n for n in NEUSTART_FELDER if n in geaendert]
+        if geaendert:
+            log.info("config.toml übernommen: %s%s", ", ".join(geaendert),
+                     f" (nach Neustart: {', '.join(spaeter)})" if spaeter else "")
+        self.tray.setze(self.tray.zustand)
+        return geaendert
+
+    def _neustart_pruefen(self):
+        """Das Einstellungsfenster bittet per Ereignis um einen Neustart (z. B. neue Tastenkombination)."""
+        h = getattr(self, "_neustart_ereignis", None)
+        if not h or ctypes.windll.kernel32.WaitForSingleObject(ctypes.c_void_p(h), 0) != 0:
+            return
+        ctypes.windll.kernel32.ResetEvent(ctypes.c_void_p(h))
+        if self.unter_waechter:
+            log.info("Neustart auf Wunsch des Einstellungsfensters")
+            self.neustart()
+        else:
+            log.warning("Neustart gewünscht, aber ohne Wächter gestartet – bitte von Hand neu starten")
+            self.tray.melde("Bitte whisper-diktat von Hand neu starten, damit alle Einstellungen greifen.")
+
     def neustart(self):
         self.exit_code = EXIT_NEUSTART
         self.beenden()
@@ -449,8 +520,18 @@ class App:
         letzte_hook = letzte_geraete = letztes_lebenszeichen = time.monotonic()
         gestartet = time.monotonic()
         geraet = self.recorder.standard_geraet()
+        takt = 0
         while self._laeuft:
-            time.sleep(5)
+            time.sleep(1)
+            takt += 1
+            if takt % 2 == 0:  # Einstellungsfenster: Änderungen schnell übernehmen
+                try:
+                    self._config_pruefen()
+                    self._neustart_pruefen()
+                except Exception:  # noqa: BLE001
+                    log.exception("Fehler beim Übernehmen der Einstellungen")
+            if takt % 5:
+                continue
             jetzt_wand, jetzt = time.time(), time.monotonic()
             try:
                 untaetig = not self.recorder.laeuft and self.auftraege.empty()

@@ -50,7 +50,7 @@ class Tray:
     Attributen: modell, modelle (dict name -> Modell mit .titel), geraet_wahl, geraet, recheneinheiten
     (list[(id, name)]), mikrofon, modus, pausiert, unter_waechter
     Methoden: waehle_modell, waehle_geraet, waehle_mikrofon, mikrofone(), aktuelles_mikrofon(), waehle_modus,
-    umschalten_pause, oeffne_fachwoerter, oeffne_einstellungen, oeffne_log, autostart_aktiv,
+    umschalten_pause, oeffne_einstellungen, oeffne_log, autostart_aktiv,
     umschalten_autostart, neustart, beenden, bedien_hinweis."""
 
     def __init__(self, aktionen, shortcut: str):
@@ -110,9 +110,8 @@ class Tray:
             pystray.MenuItem("Mikrofon", self._mikrofon_menue()),
             pystray.MenuItem("Bedienung", self._modus_menue()),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Fachwörter bearbeiten …", lambda icon, item: self.a.oeffne_fachwoerter()),
-            pystray.MenuItem("Befehle bearbeiten …", lambda icon, item: self.a.oeffne_befehle()),
-            pystray.MenuItem("Einstellungen öffnen …", lambda icon, item: self.a.oeffne_einstellungen()),
+            # Standardeintrag: öffnet sich auch per Linksklick auf das Symbol
+            pystray.MenuItem("Einstellungen …", lambda icon, item: self.a.oeffne_einstellungen(), default=True),
             pystray.MenuItem("Log öffnen", lambda icon, item: self.a.oeffne_log()),
             pystray.MenuItem("Mit Windows starten", lambda icon, item: self.a.umschalten_autostart(),
                              checked=lambda item: self.a.autostart_aktiv()),
