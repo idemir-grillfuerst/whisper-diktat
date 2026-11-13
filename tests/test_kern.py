@@ -61,6 +61,7 @@ class Simulator:
 def test_push_to_talk():
     LCTRL, Y, LSHIFT, T = 0xA2, 0x59, 0xA0, 0x54
     original = hotkey.gedrueckte_modifier
+    original_gedrueckt = hotkey._gedrueckt
     try:
         s = Simulator("ctrl+y")
         pruefe("Strg runter wird durchgelassen", s.runter(LCTRL) is False)
@@ -71,8 +72,25 @@ def test_push_to_talk():
         pruefe("Ereignisse press, release", s.events == ["press", "release"])
 
         s = Simulator("ctrl+y")
-        s.runter(LCTRL); s.runter(Y); s.hoch(LCTRL); s.hoch(Y)
+        hotkey._gedrueckt = lambda vk: vk in s.gedrueckt
+        s.runter(LCTRL); s.runter(Y); s.hoch(LCTRL)
         pruefe("Strg zuerst losgelassen beendet Aufnahme", s.events == ["press", "release"])
+        wdh = [s.runter(Y) for _ in range(6)]  # Tastenwiederholung von Y ohne Strg (vorher: „yyyyyy“)
+        pruefe("Danach weiterlaufende Y-Wiederholungen werden geschluckt", all(wdh))
+        pruefe("Wachhund schweigt während des Nachlaufs",
+               s.ptt._wachhund_schritt(True, 0.0, 5.0) is None and s.events == ["press", "release"])
+        pruefe("Y loslassen wird geschluckt und beendet den Nachlauf", s.hoch(Y) is True)
+        pruefe("Danach ist Y wieder normal", s.runter(Y) is False)
+        s.hoch(Y)
+        s.runter(LCTRL)
+        pruefe("Danach löst Strg+Y wieder normal aus", s.runter(Y) is True and s.events[-1] == "press")
+
+        s = Simulator("ctrl+y")
+        hotkey._gedrueckt = lambda vk: vk in s.gedrueckt
+        s.runter(LCTRL); s.runter(Y); s.hoch(LCTRL)
+        s.gedrueckt.discard(Y)  # Y physisch los, aber der Hook hat das Loslassen nie gesehen
+        s.ptt._wachhund_schritt(False, None, 9.0)
+        pruefe("Verlorenes Y-Loslassen: Wachhund gibt Y wieder frei", s.runter(Y) is False)
 
         s = Simulator("ctrl+y")
         s.runter(LCTRL); s.runter(LSHIFT)
@@ -98,6 +116,7 @@ def test_push_to_talk():
                s.ptt._hook_proc(0, WM_KEYDOWN, 0) != 1 and s.events == [])
     finally:
         hotkey.gedrueckte_modifier = original
+        hotkey._gedrueckt = original_gedrueckt
 
 
 def test_wachhund():

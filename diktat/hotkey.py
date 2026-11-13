@@ -98,6 +98,7 @@ class PushToTalk:
         self.eingeschaltet = True   # False = pausiert, Tasten gehen normal durch
         self.hook_ausfaelle = 0     # wie oft der Wachhund einen toten Hook bemerkt hat
         self._vom_wachhund = False  # press kam vom Wachhund statt vom Hook
+        self._taste_schlucken = False  # Haupttaste nach Diktat-Ende noch gedrückt: Wiederholungen bis Loslassen schlucken
         self._laeuft = False
         self._thread = None
         self._wachhund_thread = None
@@ -129,6 +130,11 @@ class PushToTalk:
 
         if self.key is not None:  # Variante: Zusatztasten + normale Taste (z. B. Strg+Y)
             if vk == self.key:
+                if self._taste_schlucken:
+                    # Strg wurde vor Y losgelassen: Die Y-Wiederholungen dürfen nicht als „yyyy“ im Text landen
+                    if not unten:
+                        self._taste_schlucken = False
+                    return True
                 if unten:
                     if self.aktiv:
                         return True  # Tastenwiederholung beim Halten schlucken
@@ -144,9 +150,11 @@ class PushToTalk:
                     return True
                 return False
             if gruppe in self.mods and not unten and self.aktiv:
-                # Zusatztaste vor der Haupttaste losgelassen: Aufnahme beenden, Taste aber durchlassen
+                # Zusatztaste vor der Haupttaste losgelassen: Aufnahme beenden, Zusatztaste durchlassen,
+                # die noch gehaltene Haupttaste bis zu ihrem Loslassen schlucken
                 self.aktiv = False
                 self._vom_wachhund = False
+                self._taste_schlucken = _gedrueckt(self.key)
                 self._melde("release")
             return False
 
@@ -207,6 +215,12 @@ class PushToTalk:
 
     def _wachhund_schritt(self, gedrueckt: bool, seit: float | None, jetzt: float) -> float | None:
         """Ein Prüfschritt. Gibt den neuen 'seit'-Zeitpunkt zurück (separat für Tests)."""
+        if self._taste_schlucken:
+            # Nachlauf der gehaltenen Haupttaste: keinen toten Hook vermuten. Ist die Taste physisch los,
+            # aber das Loslassen kam nie beim Hook an, Schlucken beenden (sonst wäre „y“ dauerhaft blockiert).
+            if self.key is None or not _gedrueckt(self.key):
+                self._taste_schlucken = False
+            return None
         if not self.eingeschaltet:
             return None
         if self.aktiv:
