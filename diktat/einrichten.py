@@ -99,7 +99,7 @@ def main(argv=None) -> int:
     p.add_argument("--desktop", type=Path, help="Ordner für die Desktop-Verknüpfung (Standard: echter Desktop)")
     a = p.parse_args(argv)
 
-    from .config import BEFEHLE_DATEI, CONFIG_DATEI, lade_config, persoenliche_dateien_anlegen
+    from .config import BEFEHLE_DATEI, CONFIG_DATEI, TEXTFELDER_DATEI, lade_config, persoenliche_dateien_anlegen
     from .waechter import pythonw
 
     print("[0/5] Python-Starter ohne Konsolenfenster")
@@ -110,7 +110,7 @@ def main(argv=None) -> int:
 
     print("[1/5] Persönliche Dateien")
     neu = persoenliche_dateien_anlegen()
-    for d in (CONFIG_DATEI, PROJEKT / "fachwoerter.txt", BEFEHLE_DATEI):
+    for d in (CONFIG_DATEI, PROJEKT / "fachwoerter.txt", BEFEHLE_DATEI, TEXTFELDER_DATEI):
         print(f"  {d.name}: {'neu aus Vorlage angelegt' if d in neu else 'vorhanden, unverändert'}")
     cfg = lade_config()
 

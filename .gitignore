@@ -12,6 +12,7 @@ __pycache__/
 config.toml
 fachwoerter.txt
 befehle.toml
+textfelder.toml
 # Plan-Ausführung (Arbeitsbereich der Superpowers-Skills)
 .superpowers/
 # Verknüpfungen zeigen auf rechnerabhängige Pfade, install.ps1 legt sie an

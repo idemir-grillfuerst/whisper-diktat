@@ -1,0 +1,25 @@
+# Textfeld-Regeln für den Sprachbefehl „Textfeld“. Vorlage: Beim ersten Start wird daraus textfelder.toml (deine
+# persönliche Kopie, nicht in Git). Meist brauchst du hier nichts: Das Tool sucht das Eingabefeld selbst.
+#
+# Hat es das falsche Feld erwischt: Maus auf das richtige Feld, „merke Textfeld“ sagen. Das Tool trägt die Regel dann
+# hier selbst ein. „vergiss Textfeld“ löscht sie wieder. Du kannst Regeln auch von Hand schreiben.
+#
+# Schlüssel: Programmname (wie im Task-Manager ohne .exe, z. B. "ms-teams", "claude"), bei Browsern zusätzlich die
+# Website: "chrome|outlook.office.com", "msedge|claude.ai".
+#
+# Drei Arten von Regeln:
+#   name / automation_id / typ  – genau dieses Feld nehmen (typ: "Edit" oder "Document")
+#   taste                       – statt zu suchen diese Taste drücken, z. B. "alt+shift+c"
+#   x / y                       – an diese Stelle klicken (Bruchteil 0–1 der Fensterbreite und -höhe)
+#
+# Beispiele:
+# [regeln."chrome|outlook.office.com"]
+# name = "Nachrichtentext"
+# typ = "Document"
+#
+# [regeln."ms-teams"]
+# taste = "alt+shift+c"
+#
+# [regeln."greyhound"]
+# x = 0.42
+# y = 0.91

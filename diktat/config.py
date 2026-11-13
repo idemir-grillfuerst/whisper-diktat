@@ -16,10 +16,12 @@ log = logging.getLogger("diktat")
 CONFIG_DATEI = PROJEKT / "config.toml"
 FACHWORT_DATEI = PROJEKT / "fachwoerter.txt"
 BEFEHLE_DATEI = PROJEKT / "befehle.toml"
+TEXTFELDER_DATEI = PROJEKT / "textfelder.toml"
 VORLAGEN = {
     CONFIG_DATEI: PROJEKT / "config.beispiel.toml",
     FACHWORT_DATEI: PROJEKT / "fachwoerter.beispiel.txt",
     BEFEHLE_DATEI: PROJEKT / "befehle.beispiel.toml",
+    TEXTFELDER_DATEI: PROJEKT / "textfelder.beispiel.toml",
 }
 
 
