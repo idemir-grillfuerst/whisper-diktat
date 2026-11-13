@@ -45,7 +45,8 @@ def test_parse():
     pruefe("alle 10 Formen", sum(1 for s in b.saetze if "rechner" in s) == 10)
     pruefe("Taste", b.saetze.get("mach das rückgängig") == Aktion("taste", "ctrl+z"))
     pruefe("Tastenfolge", b.saetze.get("neuer absatz") == Aktion("taste", "shift+enter shift+enter"))
-    for kaputt in ('[tasten]\n"x" = "ctrl+blub"', '[oeffnen\n', '[tasten]\n"x" = 5', '[tasten]\n"x" = "ctrl"'):
+    for kaputt in ('[tasten]\n"x" = "ctrl+blub"', '[oeffnen\n', '[tasten]\n"x" = 5', '[tasten]\n"x" = "ctrl"',
+                   '[tasten]\n"x" = "ctrl+ß"', '[tasten]\n"x" = "ctrl+ä"'):
         try:
             parse_befehle(kaputt)
             pruefe(f"abgelehnt: {kaputt!r}", False)
@@ -82,6 +83,13 @@ def test_laden(tmp):
     os.utime(d, (time.time() + 10,) * 2)
     pruefe("repariert: neu geladen", "kopieren" in lade_befehle(d).saetze)
     pruefe("fehlende Datei: leer, kein Absturz", lade_befehle(tmp / "gibtsnicht.toml").saetze == {})
+    d.write_text('[tasten]\n"x" = "ctrl+ß"\n', encoding="utf-8")
+    os.utime(d, (time.time() + 15,) * 2)
+    try:
+        b = lade_befehle(d)
+        pruefe("ctrl+ß: kein Absturz, Fehler gemeldet", b.saetze == {} and b.fehler is not None)
+    except Exception:  # noqa: BLE001
+        pruefe("ctrl+ß: kein Absturz, Fehler gemeldet", False)
 
 
 def test_vorlage():
@@ -100,6 +108,13 @@ def test_config_enter(tmp):
     pruefe("alte Datei ohne [befehle]", lade_config(c).enter_woerter == ["enter"])
     c.write_text('[befehle]\nenter = []\n', encoding="utf-8")
     pruefe("enter aus", lade_config(c).enter_woerter == [])
+    c.write_text('[befehle]\nenter = "enter"\n', encoding="utf-8")
+    pruefe("enter als Text statt Liste", lade_config(c).enter_woerter == ["enter"])
+    c.write_text('befehle = 1\n', encoding="utf-8")
+    try:
+        pruefe("befehle kein Abschnitt: Standard", lade_config(c).enter_woerter == ["enter"])
+    except Exception:  # noqa: BLE001
+        pruefe("befehle kein Abschnitt: Standard", False)
 
 
 def test_druecke():

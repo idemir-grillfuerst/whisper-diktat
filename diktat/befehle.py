@@ -99,7 +99,10 @@ def lade_befehle(datei: Path | None = None) -> Befehle:
     Fehler legen nichts lahm: Dann gibt es keine Befehle und `fehler` sagt, was los ist."""
     if datei is None:
         datei = BEFEHLE_DATEI
-        aus_vorlage(datei)
+        try:
+            aus_vorlage(datei)
+        except OSError as e:
+            log.warning("befehle.toml konnte nicht aus der Vorlage angelegt werden: %s", e)
     try:
         mtime = datei.stat().st_mtime
     except OSError:
@@ -110,7 +113,7 @@ def lade_befehle(datei: Path | None = None) -> Befehle:
     try:
         befehle = parse_befehle(datei.read_text(encoding="utf-8"))
         log.info("%s geladen: %d Sätze", datei.name, len(befehle.saetze))
-    except (ValueError, OSError) as e:
+    except Exception as e:  # noqa: BLE001 – eine kaputte Befehlsdatei darf nie ein Diktat kosten
         befehle = Befehle({}, fehler=f"{datei.name}: {e}"[:200])
         log.warning("Sprachbefehle aus – %s", befehle.fehler)
     _CACHE[datei] = (mtime, befehle)

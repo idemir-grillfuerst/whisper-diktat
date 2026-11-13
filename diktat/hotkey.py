@@ -72,7 +72,7 @@ def parse_shortcut(text: str) -> tuple[frozenset, int | None]:
             mods.add(teil)
         elif key is not None:
             raise ValueError(f"Shortcut '{text}': nur eine normale Taste erlaubt")
-        elif len(teil) == 1 and teil.isalnum():
+        elif len(teil) == 1 and teil.isascii() and teil.isalnum():
             key = ord(teil.upper())
         elif teil.startswith("f") and teil[1:].isdigit() and 1 <= int(teil[1:]) <= 24:
             key = 0x6F + int(teil[1:])

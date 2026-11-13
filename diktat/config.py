@@ -3,12 +3,15 @@
 Beide Dateien sind persönlich und nicht in Git. Im Repo liegen nur die Vorlagen config.beispiel.toml und
 fachwoerter.beispiel.txt. Fehlt eine persönliche Datei, wird sie beim ersten Zugriff aus der Vorlage angelegt.
 """
+import logging
 import shutil
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
 from . import PROJEKT
+
+log = logging.getLogger("diktat")
 
 CONFIG_DATEI = PROJEKT / "config.toml"
 FACHWORT_DATEI = PROJEKT / "fachwoerter.txt"
@@ -76,6 +79,17 @@ class Config:
     enter_woerter: list        # Diktat endet auf eines davon -> Wort weg, danach Enter ([] = aus)
 
 
+def _enter_woerter(befehle) -> list[str]:
+    """[befehle] enter: Liste von Wörtern. Ein einzelner Text gilt als ein Wort, alles andere als Standard."""
+    wert = befehle.get("enter", ["enter"]) if isinstance(befehle, dict) else ["enter"]
+    if isinstance(wert, str):
+        return [wert]
+    if isinstance(wert, list):
+        return [str(w) for w in wert]
+    log.warning("config.toml: [befehle] enter muss eine Liste sein, z. B. [\"enter\"] – nehme den Standard")
+    return ["enter"]
+
+
 def lade_config(datei=None) -> Config:
     if datei is None:
         aus_vorlage(CONFIG_DATEI)
@@ -118,7 +132,7 @@ def lade_config(datei=None) -> Config:
         modell=modell,
         geraet=str(geraet),
         modelle=modelle,
-        enter_woerter=[str(w) for w in raw.get("befehle", {}).get("enter", ["enter"])],
+        enter_woerter=_enter_woerter(raw.get("befehle")),
     )
 
 
