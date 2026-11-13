@@ -4,7 +4,7 @@ from tkinter import ttk
 
 from ..hotkey import parse_shortcut
 from . import stil
-from .daten import tasten_lesbar
+from .daten import AKTIONEN_LESBAR, Befehl, doppelte_saetze, setze_befehl, tasten_lesbar
 
 ZUSATZ_KEYSYMS = {"Control_L": "ctrl", "Control_R": "ctrl", "Shift_L": "shift", "Shift_R": "shift",
                   "Alt_L": "alt", "Alt_R": "alt", "Win_L": "win", "Win_R": "win", "Meta_L": "alt", "Meta_R": "alt"}
@@ -180,6 +180,180 @@ class TastenDialog(tk.Toplevel):
 def tasten_waehlen(eltern, start: str = "", nur_zusatz_erlaubt: bool = False,
                    titel: str = "Tastenkombination wählen") -> str | None:
     d = TastenDialog(eltern, start, titel, nur_zusatz_erlaubt)
+    d.grab_set()
+    d.wait_window()
+    return d.ergebnis
+
+
+# --- Befehl anlegen / ändern ---------------------------------------------------------------------------------------
+class BefehlDialog(tk.Toplevel):
+    """Ein Befehl: Art, Sätze (eine Zeile je Variante) und was passieren soll. `ergebnis` = Befehl nach OK."""
+
+    def __init__(self, eltern, befehl: Befehl | None, alle: list[Befehl], dateitext: str):
+        super().__init__(eltern)
+        self.title("Befehl ändern" if befehl else "Neuer Befehl")
+        self.transient(eltern.winfo_toplevel())
+        self.ergebnis: Befehl | None = None
+        self._alt, self._alle, self._dateitext = befehl, alle, dateitext
+        self.art = tk.StringVar(value=befehl.art if befehl else "tasten")
+        self.ziel = tk.StringVar(value=befehl.ziel if befehl and befehl.art == "oeffnen" else "")
+        self.tasten: list[str] = befehl.ziel.split() if befehl and befehl.art == "tasten" else []
+        self._aktionen = list(AKTIONEN_LESBAR)
+
+        f = ttk.Frame(self, padding=20)
+        f.pack(fill="both", expand=True)
+        f.columnconfigure(0, weight=1)
+        ttk.Label(f, text="Was soll passieren?", style="Titel.TLabel").grid(row=0, column=0, sticky="w")
+        arten = ttk.Frame(f)
+        arten.grid(row=1, column=0, sticky="w", pady=(4, 12))
+        for wert, text in (("oeffnen", "Etwas öffnen (Seite, Programm, Ordner)"), ("tasten", "Tasten drücken"),
+                           ("aktionen", "Eingebaute Aktion")):
+            ttk.Radiobutton(arten, text=text, value=wert, variable=self.art, command=self._art_zeigen).pack(
+                side="left", padx=(0, 16))
+
+        ttk.Label(f, text="Sätze", style="Titel.TLabel").grid(row=2, column=0, sticky="w")
+        stil.erklaerung(f, "Eine Zeile je Variante. Der Befehl wirkt nur, wenn das ganze Diktat genau so ein Satz ist; "
+                        "Groß-/Kleinschreibung und Satzzeichen sind egal.").grid(row=3, column=0, sticky="w")
+        self.saetze_text = tk.Text(f, height=4, width=56, wrap="word", font=("Segoe UI", 10))
+        self.saetze_text.grid(row=4, column=0, sticky="we", pady=(4, 0))
+        if befehl:
+            self.saetze_text.insert("1.0", "\n".join(befehl.saetze))
+        self.saetze_text.bind("<KeyRelease>", lambda e: self._pruefen_live())
+        self.warnung = ttk.Label(f, style="Neustart.TLabel", wraplength=stil.px(520), justify="left")
+        self.warnung.grid(row=5, column=0, sticky="w")
+
+        self._teil = ttk.Frame(f)
+        self._teil.grid(row=6, column=0, sticky="we", pady=(12, 0))
+        # Öffnen
+        self._oeffnen = ttk.Frame(self._teil)
+        ttk.Label(self._oeffnen, text="Adresse, Programm oder Ordner", style="Titel.TLabel").grid(row=0, column=0,
+                                                                                                 sticky="w")
+        ttk.Entry(self._oeffnen, textvariable=self.ziel, width=56).grid(row=1, column=0, columnspan=4, sticky="we",
+                                                                       pady=(4, 4))
+        ttk.Button(self._oeffnen, text="Programm wählen …", command=self._programm).grid(row=2, column=0, sticky="w")
+        ttk.Button(self._oeffnen, text="Ordner wählen …", command=self._ordner).grid(row=2, column=1, sticky="w",
+                                                                                   padx=(8, 0))
+        ttk.Button(self._oeffnen, text="Testen", command=self._testen).grid(row=2, column=2, sticky="w", padx=(8, 0))
+        self._formen = stil.erklaerung(self._oeffnen, "")
+        self._formen.grid(row=3, column=0, columnspan=4, sticky="w", pady=(8, 0))
+        # Tasten
+        self._tasten_rahmen = ttk.Frame(self._teil)
+        ttk.Label(self._tasten_rahmen, text="Tasten", style="Titel.TLabel").grid(row=0, column=0, sticky="w")
+        self._tasten_anzeige = ttk.Label(self._tasten_rahmen, style="Titel.TLabel")
+        self._tasten_anzeige.grid(row=1, column=0, columnspan=3, sticky="w", pady=(4, 4))
+        ttk.Button(self._tasten_rahmen, text="Taste wählen …", command=self._taste_neu).grid(row=2, column=0,
+                                                                                            sticky="w")
+        ttk.Button(self._tasten_rahmen, text="+ weitere Taste danach", command=self._taste_dazu).grid(
+            row=2, column=1, sticky="w", padx=(8, 0))
+        ttk.Button(self._tasten_rahmen, text="Zurücksetzen", command=self._tasten_leeren).grid(row=2, column=2,
+                                                                                               sticky="w", padx=(8, 0))
+        # Aktion
+        self._aktion_rahmen = ttk.Frame(self._teil)
+        ttk.Label(self._aktion_rahmen, text="Aktion", style="Titel.TLabel").grid(row=0, column=0, sticky="w")
+        self.aktion_box = ttk.Combobox(self._aktion_rahmen, state="readonly", width=48,
+                                       values=[AKTIONEN_LESBAR[a] for a in self._aktionen])
+        self.aktion_box.grid(row=1, column=0, sticky="w", pady=(4, 0))
+        if befehl and befehl.art == "aktionen" and befehl.ziel in self._aktionen:
+            self.aktion_box.current(self._aktionen.index(befehl.ziel))
+
+        self.fehler_text = ttk.Label(f, style="Fehler.TLabel", wraplength=stil.px(520), justify="left")
+        self.fehler_text.grid(row=7, column=0, sticky="w", pady=(12, 0))
+        knoepfe = ttk.Frame(f)
+        knoepfe.grid(row=8, column=0, sticky="e", pady=(12, 0))
+        ttk.Button(knoepfe, text="Abbrechen", command=self.destroy).pack(side="right")
+        ttk.Button(knoepfe, text="OK", style="Accent.TButton", command=self._fertig).pack(side="right", padx=(0, 8))
+        self._art_zeigen()
+        self._tasten_zeigen()
+        self._pruefen_live()
+
+    def _saetze(self) -> list[str]:
+        return [z.strip() for z in self.saetze_text.get("1.0", "end").splitlines() if z.strip()]
+
+    def _art_zeigen(self):
+        for teil in (self._oeffnen, self._tasten_rahmen, self._aktion_rahmen):
+            teil.pack_forget()
+        {"oeffnen": self._oeffnen, "tasten": self._tasten_rahmen, "aktionen": self._aktion_rahmen}[
+            self.art.get()].pack(fill="x")
+        self._pruefen_live()
+
+    def _pruefen_live(self):
+        saetze = self._saetze()
+        name = saetze[0] if saetze else "Name"
+        self._formen.configure(text=f"Sagbar als: „öffne {name}“, „{name} öffnen“, „mach {name} auf“, "
+                                    f"„zeig mir {name}“ … (alle Formen automatisch).")
+        eigen = self._alt.schluessel if self._alt else ""
+        doppelt = doppelte_saetze(self._alle, Befehl(self.art.get(), saetze, "", eigen))
+        self.warnung.configure(text=("Schon in einem anderen Befehl: " + ", ".join(doppelt)
+                                     + " – dort bleibt er wirksam, hier nicht.") if doppelt else "")
+
+    # --- Öffnen ---
+    def _programm(self):
+        from tkinter import filedialog
+        pfad = filedialog.askopenfilename(parent=self, title="Programm wählen",
+                                          filetypes=[("Programme", "*.exe *.lnk *.bat *.cmd"), ("Alle Dateien", "*")])
+        if pfad:
+            self.ziel.set(pfad.replace("/", "\\"))
+
+    def _ordner(self):
+        from tkinter import filedialog
+        pfad = filedialog.askdirectory(parent=self, title="Ordner wählen")
+        if pfad:
+            self.ziel.set(pfad.replace("/", "\\"))
+
+    def _testen(self):
+        import os
+        try:
+            os.startfile(self.ziel.get().strip())
+            self.fehler_text.configure(text="")
+        except OSError as e:
+            self.fehler_text.configure(text=f"Lässt sich nicht öffnen: {e}")
+
+    # --- Tasten ---
+    def _tasten_zeigen(self):
+        self._tasten_anzeige.configure(text=tasten_lesbar(" ".join(self.tasten)) if self.tasten
+                                       else "noch keine Taste gewählt")
+
+    def _taste_neu(self):
+        k = tasten_waehlen(self, self.tasten[-1] if self.tasten else "")
+        if k:
+            self.tasten = (self.tasten[:-1] if self.tasten else []) + [k]
+            self._tasten_zeigen()
+
+    def _taste_dazu(self):
+        k = tasten_waehlen(self, "", titel="Weitere Taste (wird danach gedrückt)")
+        if k:
+            self.tasten.append(k)
+            self._tasten_zeigen()
+
+    def _tasten_leeren(self):
+        self.tasten = []
+        self._tasten_zeigen()
+
+    # --- Fertig ---
+    def _befehl(self) -> Befehl:
+        art = self.art.get()
+        if art == "tasten":
+            ziel = " ".join(self.tasten)
+        elif art == "aktionen":
+            i = self.aktion_box.current()
+            ziel = self._aktionen[i] if i >= 0 else ""
+        else:
+            ziel = self.ziel.get().strip()
+        return Befehl(art, self._saetze(), ziel)
+
+    def _fertig(self):
+        neu = self._befehl()
+        try:
+            setze_befehl(self._dateitext, self._alt, neu)  # nur prüfen, gespeichert wird im Reiter
+        except ValueError as e:
+            self.fehler_text.configure(text=str(e))
+            return
+        self.ergebnis = neu
+        self.destroy()
+
+
+def befehl_bearbeiten(eltern, befehl: Befehl | None, alle: list[Befehl], dateitext: str) -> Befehl | None:
+    d = BefehlDialog(eltern, befehl, alle, dateitext)
     d.grab_set()
     d.wait_window()
     return d.ergebnis

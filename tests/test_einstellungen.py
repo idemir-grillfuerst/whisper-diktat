@@ -343,6 +343,82 @@ def test_mikrofon_modell(tmp):
         geraete.mikrofone, geraete.recheneinheiten = alt
 
 
+def test_befehle_reiter(tmp):
+    import tkinter as tk
+    from diktat.befehle import parse_befehle
+    from diktat.einstellungen import fenster as fm
+    from diktat.einstellungen.befehle_reiter import filtere
+    from diktat.einstellungen.daten import Befehl, lies_befehle
+    from diktat.einstellungen.dialoge import BefehlDialog
+    B = (PROJEKT / "befehle.beispiel.toml").read_text(encoding="utf-8")
+    bs = lies_befehle(B)
+    pruefe("Filter: Suche über Sätze", any("kopieren" in b.saetze for b in filtere(bs, "kopier", None)))
+    pruefe("Filter: Suche über Wirkung lesbar und roh", filtere(bs, "Strg+C", None) == filtere(bs, "ctrl+c", None)
+           and len(filtere(bs, "ctrl+c", None)) >= 1)
+    pruefe("Filter: nach Art", all(b.art == "oeffnen" for b in filtere(bs, "", "oeffnen"))
+           and len(filtere(bs, "", "oeffnen")) > 5)
+    pruefe("Filter: Groß/klein egal", filtere(bs, "OUTLOOK", None) == filtere(bs, "outlook", None) != [])
+
+    dateien = temp_dateien(tmp)
+    root = tk.Tk()
+    root.withdraw()
+    try:
+        f = fm.Fenster(root, dateien=dateien)
+        f.frage = lambda *a: False
+        fehler = []
+        f.zeige_fehler = fehler.append
+        r = next(x for x in f.reiter if x.titel == "Befehle")
+        f.notebook.select(r)
+        root.update_idletasks()
+        pruefe("Befehle: Tabelle gefüllt", len(r.tabelle.get_children()) == len(bs))
+        r.suche.set("outlook")
+        pruefe("Befehle: Suche filtert die Tabelle", 0 < len(r.tabelle.get_children()) < len(bs))
+        r.suche.set("")
+        kop = next(b for b in r.befehle if "kopieren" in b.saetze)
+        r.bestaetigen = lambda text: True
+        r.loeschen(kop)
+        neu = dateien["befehle"].read_text(encoding="utf-8")
+        pruefe("Befehle: gelöscht, sofort gespeichert", "kopieren" not in parse_befehle(neu).saetze
+               and not r.geaendert())
+        pruefe("Befehle: Kommentare bleiben", [z for z in B.splitlines() if z.startswith("#")]
+               == [z for z in neu.splitlines() if z.startswith("#")])
+        r.speichern(None, Befehl("tasten", ["fett", "fett machen"], "ctrl+b"))
+        pruefe("Befehle: neu angelegt", parse_befehle(dateien["befehle"].read_text(encoding="utf-8"))
+               .saetze["fett machen"].ziel == "ctrl+b")
+        r.speichern(None, Befehl("tasten", ["x"], "ctrl+blub"))
+        pruefe("Befehle: ungültig -> Meldung, Datei bleibt", fehler and "fett" in
+               dateien["befehle"].read_text(encoding="utf-8"))
+
+        d = BefehlDialog(r, None, r.befehle, dateien["befehle"].read_text(encoding="utf-8"))
+        d.art.set("tasten")
+        d.saetze_text.insert("1.0", "test eins\ntest zwei")
+        d.tasten = ["ctrl+e"]
+        d._fertig()
+        pruefe("Dialog: neuer Tastenbefehl", d.ergebnis == Befehl("tasten", ["test eins", "test zwei"], "ctrl+e"))
+        d = BefehlDialog(r, None, r.befehle, dateien["befehle"].read_text(encoding="utf-8"))
+        d.art.set("oeffnen")
+        d.saetze_text.insert("1.0", "portal")
+        d._fertig()
+        pruefe("Dialog: ohne Ziel bleibt offen mit Fehler", d.ergebnis is None and d.fehler_text.cget("text"))
+        d.destroy()
+        d = BefehlDialog(r, None, r.befehle, dateien["befehle"].read_text(encoding="utf-8"))
+        d.art.set("aktionen")
+        d.saetze_text.insert("1.0", "textfeld bitte")
+        d.aktion_box.current(0)
+        d.aktion_box.event_generate("<<ComboboxSelected>>")
+        d._fertig()
+        pruefe("Dialog: Aktion", d.ergebnis is not None and d.ergebnis.art == "aktionen"
+               and d.ergebnis.ziel == "textfeld")
+        d = BefehlDialog(r, None, r.befehle, dateien["befehle"].read_text(encoding="utf-8"))
+        d.saetze_text.insert("1.0", "Rückgängig")
+        root.update_idletasks()
+        d._pruefen_live()
+        pruefe("Dialog: warnt bei doppeltem Satz", "rückgängig" in d.warnung.cget("text"))
+        d.destroy()
+    finally:
+        root.destroy()
+
+
 if __name__ == "__main__":
     test_tomltext()
     test_daten()
@@ -354,5 +430,7 @@ if __name__ == "__main__":
         test_fenster_rauch(Path(t))
     with tempfile.TemporaryDirectory() as t:
         test_mikrofon_modell(Path(t))
+    with tempfile.TemporaryDirectory() as t:
+        test_befehle_reiter(Path(t))
     print(f"\n{len(FEHLER)} Fehler" + (": " + ", ".join(FEHLER) if FEHLER else ""))
     sys.exit(1 if FEHLER else 0)
