@@ -2,6 +2,8 @@
 import pystray
 from PIL import Image, ImageDraw
 
+from .geraete import art
+
 FARBEN = {
     "laedt": ((70, 130, 230), "lädt Modell …"),
     "bereit": ((140, 140, 140), "bereit"),
@@ -12,11 +14,10 @@ FARBEN = {
     "fehler": ((40, 40, 40), "Fehler – siehe Log"),
 }
 
-STUFEN_TEXT = {
-    "schnell": "Schnell – Grafik (Standard)",
-    "leise": "Leise – NPU, sparsam",
-    "genau": "Genau – großes Modell",
-    "notfall": "Notfall – nur CPU",
+MODUS_TEXT = {
+    "halten": "Halten – sprechen, solange gedrückt",
+    "umschalten": "Umschalten – tippen = Start/Stopp",
+    "beides": "Beides – halten oder kurz tippen",
 }
 
 
@@ -38,17 +39,17 @@ def _bild(zustand) -> Image.Image:
     return img
 
 
-MODUS_TEXT = {
-    "halten": "Halten – sprechen, solange gedrückt",
-    "umschalten": "Umschalten – tippen = Start/Stopp",
-    "beides": "Beides – halten oder kurz tippen",
-}
+def _anzeige(name: str) -> str:
+    return name.replace("®", "").replace("  ", " ")
 
 
 class Tray:
-    """aktionen: Objekt mit stufe (str), stufen (list), pausiert (bool), unter_waechter (bool) und den Methoden
-    waehle_stufe(name), umschalten_pause(), oeffne_fachwoerter(), oeffne_einstellungen(), oeffne_log(),
-    autostart_aktiv(), umschalten_autostart(), neustart(), beenden()."""
+    """aktionen: Objekt mit
+    Attributen: modell, modelle (dict name -> Modell mit .titel), geraet_wahl, geraet, recheneinheiten
+    (list[(id, name)]), mikrofon, modus, pausiert, unter_waechter
+    Methoden: waehle_modell, waehle_geraet, waehle_mikrofon, mikrofone(), aktuelles_mikrofon(), waehle_modus,
+    umschalten_pause, oeffne_fachwoerter, oeffne_einstellungen, oeffne_log, autostart_aktiv,
+    umschalten_autostart, neustart, beenden, bedien_hinweis."""
 
     def __init__(self, aktionen, shortcut: str):
         self.a = aktionen
@@ -58,25 +59,42 @@ class Tray:
         self.detail = ""
         self.icon = pystray.Icon("whisper-diktat", self._bilder["laedt"], self._titel(), self._menue())
 
-    def _stufen_menue(self):
-        def eintrag(name):
-            return pystray.MenuItem(
-                STUFEN_TEXT.get(name, name),
-                lambda icon, item: self.a.waehle_stufe(name),
-                checked=lambda item: self.a.stufe == name,
-                radio=True,
-            )
-        return pystray.Menu(*[eintrag(n) for n in self.a.stufen])
+    # --- Untermenüs ---------------------------------------------------------------------------
+    def _radio(self, text, aktion, ist_aktiv):
+        return pystray.MenuItem(text, lambda icon, item: aktion(), checked=lambda item: ist_aktiv(), radio=True)
+
+    def _modell_menue(self):
+        return pystray.Menu(*[
+            self._radio(m.titel, (lambda n=n: self.a.waehle_modell(n)), (lambda n=n: self.a.modell == n))
+            for n, m in self.a.modelle.items()
+        ])
+
+    def _geraet_menue(self):
+        eintraege = [self._radio(lambda _: f"Automatisch (jetzt {art(self.a.geraet)})",
+                                 lambda: self.a.waehle_geraet("auto"), lambda: self.a.geraet_wahl == "auto")]
+        for g, name in self.a.recheneinheiten:
+            text = f"{art(g)} – {name}" + ("  (erstes Laden dauert Minuten)" if g.startswith("NPU") else "")
+            eintraege.append(self._radio(text, (lambda g=g: self.a.waehle_geraet(g)),
+                                         (lambda g=g: self.a.geraet_wahl == g)))
+        return pystray.Menu(*eintraege)
+
+    def _mikrofon_menue(self):
+        eintraege = [self._radio(lambda _: f"Windows-Standard (jetzt {_anzeige(self.a.aktuelles_mikrofon())})",
+                                 lambda: self.a.waehle_mikrofon(""), lambda: self.a.mikrofon == "")]
+        namen = list(self.a.mikrofone())
+        if self.a.mikrofon and self.a.mikrofon not in namen:
+            namen.append(self.a.mikrofon)  # gewählt, aber gerade nicht angeschlossen
+        for n in namen:
+            text = _anzeige(n) + ("  (nicht angeschlossen)" if n not in self.a.mikrofone() else "")
+            eintraege.append(self._radio(text, (lambda n=n: self.a.waehle_mikrofon(n)),
+                                         (lambda n=n: self.a.mikrofon == n)))
+        return pystray.Menu(*eintraege)
 
     def _modus_menue(self):
-        def eintrag(modus):
-            return pystray.MenuItem(
-                MODUS_TEXT[modus],
-                lambda icon, item: self.a.waehle_modus(modus),
-                checked=lambda item: self.a.modus == modus,
-                radio=True,
-            )
-        return pystray.Menu(*[eintrag(m) for m in MODUS_TEXT])
+        return pystray.Menu(*[
+            self._radio(text, (lambda m=m: self.a.waehle_modus(m)), (lambda m=m: self.a.modus == m))
+            for m, text in MODUS_TEXT.items()
+        ])
 
     def _menue(self):
         return pystray.Menu(
@@ -85,7 +103,9 @@ class Tray:
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(lambda _: "Fortsetzen" if self.a.pausiert else "Pausieren",
                              lambda icon, item: self.a.umschalten_pause()),
-            pystray.MenuItem("Stufe", self._stufen_menue()),
+            pystray.MenuItem("Modell", self._modell_menue()),
+            pystray.MenuItem("Recheneinheit", self._geraet_menue()),
+            pystray.MenuItem("Mikrofon", self._mikrofon_menue()),
             pystray.MenuItem("Bedienung", self._modus_menue()),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Fachwörter bearbeiten …", lambda icon, item: self.a.oeffne_fachwoerter()),
@@ -99,9 +119,17 @@ class Tray:
             pystray.MenuItem("Beenden", lambda icon, item: self.a.beenden()),
         )
 
+    def menue_neu_bauen(self) -> None:
+        """Nach Änderungen an der Geräteliste (Mikrofon angesteckt/abgezogen)."""
+        self.icon.menu = self._menue()
+        try:
+            self.icon.update_menu()
+        except Exception:  # noqa: BLE001
+            pass
+
     def _titel(self) -> str:
-        stufe = STUFEN_TEXT.get(self.a.stufe, self.a.stufe).split(" –")[0]
-        return f"Whisper-Diktat: {FARBEN[self.zustand][1]} · {stufe}"[:127]
+        modell = self.a.modelle[self.a.modell].titel.split(" –")[0]
+        return f"Whisper-Diktat: {FARBEN[self.zustand][1]} · {modell} · {art(self.a.geraet)}"[:127]
 
     def setze(self, zustand: str, detail: str | None = None) -> None:
         self.zustand = zustand

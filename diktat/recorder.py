@@ -17,14 +17,18 @@ from collections import deque
 import numpy as np
 import sounddevice as sd
 
+from .geraete import mikrofon_nummer
+
 log = logging.getLogger(__name__)
 RATE = 16000
 BLOCK = 800  # 50 ms
 
 
 class Recorder:
-    def __init__(self, offen_halten: bool = False, vorlauf_s: float = 0.4):
+    def __init__(self, offen_halten: bool = False, vorlauf_s: float = 0.4, mikrofon: str = ""):
         self.offen_halten = offen_halten
+        self.mikrofon = mikrofon       # "" = Windows-Standard, sonst Gerätename
+        self.mikrofon_fehlt = False    # gewähltes Mikrofon war beim letzten Öffnen nicht da
         self._vorlauf = deque(maxlen=max(1, int(vorlauf_s * RATE / BLOCK)))
         self._stream = None
         self._aufnahme = False
@@ -43,8 +47,13 @@ class Recorder:
 
     def _oeffne(self):
         t0 = time.perf_counter()
+        nummer = mikrofon_nummer(self.mikrofon) if self.mikrofon else None
+        fehlt = bool(self.mikrofon) and nummer is None
+        if fehlt and not self.mikrofon_fehlt:
+            log.warning("Gewähltes Mikrofon '%s' nicht gefunden – nehme den Windows-Standard", self.mikrofon)
+        self.mikrofon_fehlt = fehlt
         self._stream = sd.InputStream(samplerate=RATE, channels=1, dtype="float32", blocksize=BLOCK,
-                                      callback=self._cb)
+                                      device=nummer, callback=self._cb)
         self._stream.start()
         try:
             self.geraet = sd.query_devices(self._stream.device)["name"]
@@ -109,6 +118,15 @@ class Recorder:
             if self.offen_halten and war_offen:
                 self._oeffne()
             return True
+
+    def waehle(self, mikrofon: str) -> None:
+        """Anderes Mikrofon nehmen. Gilt ab der nächsten Aufnahme (offen gehaltener Stream wird neu geöffnet)."""
+        with self._lock:
+            self.mikrofon = mikrofon
+            self.mikrofon_fehlt = False
+            if self.offen_halten and not self._aufnahme and self._stream is not None:
+                self._schliesse()
+                self._oeffne()
 
     def standard_geraet(self) -> str:
         try:

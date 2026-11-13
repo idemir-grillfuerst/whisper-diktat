@@ -7,15 +7,26 @@ from . import PROJEKT
 CONFIG_DATEI = PROJEKT / "config.toml"
 FACHWORT_DATEI = PROJEKT / "fachwoerter.txt"
 
+MODI = ("halten", "umschalten", "beides")
+
+# Bis v0.5 gab es „Stufen“ (Modell + Gerät fest gekoppelt). Ältere config.toml werden so übersetzt:
+ALTE_STUFEN = {
+    "schnell": ("turbo", "GPU"),
+    "leise": ("turbo", "NPU"),
+    "genau": ("large-v3", "GPU"),
+    "notfall": ("turbo", "CPU"),
+}
+STANDARD_MODELLE = {
+    "turbo": ("Turbo – schnell", "OpenVINO/whisper-large-v3-turbo-int8-ov"),
+    "large-v3": ("Large-v3 – genau", "OpenVINO/whisper-large-v3-int8-ov"),
+}
+
 
 @dataclass
-class Stufe:
+class Modell:
     name: str
+    titel: str
     repo: str
-    geraet: str
-
-
-MODI = ("halten", "umschalten", "beides")
 
 
 @dataclass
@@ -30,18 +41,30 @@ class Config:
     einfuegen: str
     leerzeichen_danach: bool
     aufnahmen_speichern: bool
+    mikrofon: str              # "" = Windows-Standard
     mikrofon_offen_halten: bool
-    stufe: Stufe
-    stufen: dict
+    modell: str                # Schlüssel in modelle
+    geraet: str                # "auto", "GPU", "NPU", "CPU", "GPU.0" …
+    modelle: dict
 
 
-def lade_config() -> Config:
-    raw = tomllib.loads(CONFIG_DATEI.read_text(encoding="utf-8"))
+def lade_config(datei=None) -> Config:
+    raw = tomllib.loads((datei or CONFIG_DATEI).read_text(encoding="utf-8"))
     a = raw.get("allgemein", {})
-    stufen = {n: Stufe(n, s["repo"], s["geraet"]) for n, s in raw.get("stufen", {}).items()}
-    aktiv = raw.get("modell", {}).get("stufe", "schnell")
-    if aktiv not in stufen:
-        raise ValueError(f"Stufe '{aktiv}' fehlt in config.toml unter [stufen.*]")
+    m = raw.get("modell", {})
+
+    if raw.get("modelle"):
+        modelle = {n: Modell(n, s.get("titel", n), s["repo"]) for n, s in raw["modelle"].items()}
+    else:
+        modelle = {n: Modell(n, t, r) for n, (t, r) in STANDARD_MODELLE.items()}
+
+    if "name" in m:
+        modell, geraet = m["name"], m.get("geraet", "auto")
+    else:  # alte Datei mit [modell] stufe = "..."
+        modell, geraet = ALTE_STUFEN.get(m.get("stufe", "schnell"), ("turbo", "auto"))
+    if modell not in modelle:
+        raise ValueError(f"Modell '{modell}' fehlt in config.toml unter [modelle.*]")
+
     einfuegen = a.get("einfuegen", "tippen")
     if einfuegen not in ("tippen", "zwischenablage"):
         raise ValueError("einfuegen muss 'tippen' oder 'zwischenablage' sein")
@@ -59,9 +82,11 @@ def lade_config() -> Config:
         einfuegen=einfuegen,
         leerzeichen_danach=bool(a.get("leerzeichen_danach", True)),
         aufnahmen_speichern=bool(a.get("aufnahmen_speichern", False)),
+        mikrofon=str(a.get("mikrofon", "")),
         mikrofon_offen_halten=bool(a.get("mikrofon_offen_halten", False)),
-        stufe=stufen[aktiv],
-        stufen=stufen,
+        modell=modell,
+        geraet=str(geraet),
+        modelle=modelle,
     )
 
 
@@ -82,27 +107,49 @@ def fachwort_prompt(max_zeichen: int = 600) -> str | None:
     return prompt
 
 
+def _toml_text(wert: str) -> str:
+    return '"' + wert.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
 def speichere_wert(abschnitt: str, schluessel: str, wert: str, datei=None) -> None:
-    """Ersetzt in config.toml genau die Zeile `schluessel = ...` im Abschnitt [abschnitt] durch einen
-    Text-Wert. Kommentare und alles andere bleiben unverändert."""
+    """Setzt in config.toml `schluessel = "wert"` im Abschnitt [abschnitt]. Fehlt die Zeile, wird sie am Ende des
+    Abschnitts ergänzt. Kommentare und alles andere bleiben unverändert."""
     datei = datei or CONFIG_DATEI
     zeilen = datei.read_text(encoding="utf-8").splitlines(keepends=True)
-    aktuell, ersetzt = None, False
+    neu = f"{schluessel} = {_toml_text(wert)}\n"
+    aktuell, ende_abschnitt = None, None
     for i, z in enumerate(zeilen):
         s = z.strip()
         if s.startswith("[") and s.endswith("]"):
+            if aktuell == f"[{abschnitt}]" and ende_abschnitt is None:
+                ende_abschnitt = i
             aktuell = s
         elif aktuell == f"[{abschnitt}]" and not s.startswith("#") and s.split("=")[0].strip() == schluessel:
-            zeilen[i] = f'{schluessel} = "{wert}"\n'
-            ersetzt = True
+            zeilen[i] = neu
             break
-    if not ersetzt:
-        raise ValueError(f"In config.toml fehlt [{abschnitt}] {schluessel} = ...")
+    else:
+        if aktuell == f"[{abschnitt}]" and ende_abschnitt is None:
+            ende_abschnitt = len(zeilen)
+        if ende_abschnitt is None:
+            raise ValueError(f"In config.toml fehlt der Abschnitt [{abschnitt}]")
+        while ende_abschnitt > 0 and not zeilen[ende_abschnitt - 1].strip():
+            ende_abschnitt -= 1  # vor der Leerzeile zum nächsten Abschnitt einfügen
+        if ende_abschnitt > 0 and not zeilen[ende_abschnitt - 1].endswith("\n"):
+            zeilen[ende_abschnitt - 1] += "\n"
+        zeilen.insert(ende_abschnitt, neu)
     datei.write_text("".join(zeilen), encoding="utf-8")
 
 
-def speichere_stufe(name: str, datei=None) -> None:
-    speichere_wert("modell", "stufe", name, datei)
+def speichere_modell(name: str, datei=None) -> None:
+    speichere_wert("modell", "name", name, datei)
+
+
+def speichere_geraet(geraet: str, datei=None) -> None:
+    speichere_wert("modell", "geraet", geraet, datei)
+
+
+def speichere_mikrofon(name: str, datei=None) -> None:
+    speichere_wert("allgemein", "mikrofon", name, datei)
 
 
 def speichere_modus(modus: str, datei=None) -> None:

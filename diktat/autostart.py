@@ -85,7 +85,9 @@ def aufgaben_xml(name: str = AUFGABE, intervall_min: int = 10) -> str:
 
 
 def _schtasks(*args) -> subprocess.CompletedProcess:
-    return subprocess.run(["schtasks", *args], capture_output=True, text=True, creationflags=CREATE_NO_WINDOW)
+    # schtasks schreibt in der OEM-Codepage (Umlaute in deutschen Meldungen)
+    return subprocess.run(["schtasks", *args], capture_output=True, text=True, encoding="oem", errors="replace",
+                          creationflags=CREATE_NO_WINDOW)
 
 
 def aufgabe_registrieren(name: str = AUFGABE, xml: str | None = None) -> None:

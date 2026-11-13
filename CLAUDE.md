@@ -37,8 +37,11 @@ transkribiert lokal mit Whisper und fügt den Text dort ein, wo der Cursor steht
   Ein Start aus einem Terminal-Tab heraus stirbt, sobald der Tab geschlossen wird.
 - Laufende Instanz für ein Update beenden: Menü „Beenden“ (Exit 0, der Wächter endet mit), oder alle python-Prozesse
   hart beenden, deren Befehlszeile `diktat`, `start.pyw` oder `multiprocessing-fork` enthält.
-- `config.toml`: Shortcut, Stufen (Modell + Gerät), Einfügemodus. `fachwoerter.txt`: initial_prompt.
-- `tests/`: `test_kern`, `test_phase2 [--engine]`, `test_phase3`, `test_phase4 [--engine]`, `test_autostart` (jeweils `python -m tests.<name>`), ohne echte
+  - `geraete.py`: vorhandene Recheneinheiten (OpenVINO `available_devices`, einmal beim Start vor dem Hook) und
+    Mikrofone (nur Standard-Audioschnittstelle MME, Namen statt Nummern, weil Nummern sich ändern)
+- `config.toml`: Shortcut, `[modell] name` (turbo/large-v3) + `geraet` (auto/GPU/NPU/CPU), `mikrofon` ("" = Windows-
+  Standard), Einfügemodus. Alte Dateien mit `[modell] stufe` werden beim Laden übersetzt. `fachwoerter.txt`: initial_prompt.
+- `tests/`: `test_kern`, `test_phase2 [--engine]`, `test_phase3`, `test_phase4 [--engine]`, `test_autostart`, `test_geraete` (jeweils `python -m tests.<name>`), ohne echte
   Tastatureingaben. Außerdem `mikro_probe` (Stille-Messung am Mikrofon). Achtung: test_phase3 schreibt in `logs/waechter.log`.
 - `whisper-test/`: frühere Experimente und Benchmarks.
 - Keine echten Tastatureingaben (SendInput) in automatischen Tests: Sie landen im aktiven Fenster des Nutzers.

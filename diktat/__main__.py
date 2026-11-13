@@ -1,7 +1,8 @@
 """Startpunkt:  %USERPROFILE%\\.venvs\\whisper\\Scripts\\python.exe -m diktat   (im Projektordner)
 
 Ablauf: Shortcut halten -> Aufnahme, loslassen -> Whisper (eigener Prozess) -> Text an der Cursorposition.
-Menü im Taskleisten-Symbol: Pausieren, Stufe wechseln, Fachwörter/Einstellungen/Log öffnen, Beenden.
+Menü im Taskleisten-Symbol: Pausieren, Modell, Recheneinheit, Mikrofon, Bedienung, Fachwörter/Einstellungen/Log,
+Autostart, Beenden.
 """
 import ctypes
 import faulthandler
@@ -22,12 +23,13 @@ import numpy as np
 from . import PROJEKT, autostart
 from .waechter import EXIT_LAEUFT_SCHON, EXIT_NEUSTART, EXIT_OK
 from .config import (CONFIG_DATEI, FACHWORT_DATEI, fachwort_prompt, lade_config, speichere_modus,
-                     speichere_stufe)
+                     speichere_geraet, speichere_mikrofon, speichere_modell)
+from . import geraete
 from .engine import Engine
 from .hotkey import PushToTalk
 from .inserter import fuege_ein
 from .recorder import RATE, Recorder
-from .tray import STUFEN_TEXT, Tray
+from .tray import Tray
 
 log = logging.getLogger("diktat")
 LOG_DATEI = PROJEKT / "logs" / "diktat.log"
@@ -94,18 +96,22 @@ def oeffne_im_editor(pfad) -> None:
 class App:
     def __init__(self):
         self.cfg = lade_config()
-        self.stufen = list(self.cfg.stufen)
-        self.stufe = self.cfg.stufe.name
+        self.modelle = self.cfg.modelle
+        self.modell = self.cfg.modell
+        self.geraet_wahl = self.cfg.geraet              # "auto" oder ein OpenVINO-Gerät
+        self.recheneinheiten = geraete.recheneinheiten()  # vor dem Tastatur-Hook: Import dauert ~0,5 s
         self.pausiert = False
         self.unter_waechter = os.environ.get("DIKTAT_WAECHTER") == "1"
         self.exit_code = EXIT_OK
-        self.recorder = Recorder(offen_halten=self.cfg.mikrofon_offen_halten)
-        self.engine = self._neue_engine(self.stufe)
+        self.recorder = Recorder(offen_halten=self.cfg.mikrofon_offen_halten, mikrofon=self.cfg.mikrofon)
+        self._mikrofone = geraete.mikrofone()
+        self.engine = self._neue_engine()
         self._engine_lock = threading.Lock()
         self.ereignisse: queue.Queue = queue.Queue()
         self.auftraege: queue.Queue = queue.Queue()
         self.hotkey = PushToTalk(self.cfg.shortcut, self.ereignisse.put_nowait)
         self.modus = self.cfg.modus
+        self._autostart: bool | None = None
         self.tray = Tray(self, self.cfg.shortcut)
         self._start_zeit = 0.0          # Beginn der laufenden Aufnahme
         self._druck_zeit = 0.0          # Zeitpunkt des letzten Tastendrucks
@@ -115,22 +121,32 @@ class App:
         self._letzte_aktivitaet = time.monotonic()
         self._laeuft = True
 
-    # --- Modell / Stufe --------------------------------------------------------------------
-    def _neue_engine(self, name: str) -> Engine:
-        s = self.cfg.stufen[name]
-        return Engine(s.repo, s.geraet, self.cfg.sprache)
+    # --- Modell / Recheneinheit / Mikrofon ---------------------------------------------------
+    @property
+    def geraet(self) -> str:
+        """Tatsächlich genutzte Recheneinheit ('auto' aufgelöst)."""
+        return geraete.loese_geraet(self.geraet_wahl, self.recheneinheiten)
+
+    @property
+    def mikrofon(self) -> str:
+        return self.recorder.mikrofon
+
+    def beschreibung(self) -> str:
+        return f"{self.modelle[self.modell].titel.split(' –')[0]} auf {geraete.art(self.geraet)}"
+
+    def _neue_engine(self) -> Engine:
+        return Engine(self.modelle[self.modell].repo, self.geraet, self.cfg.sprache)
 
     def _lade(self, engine: Engine, versuche: int = 5):
         """Lädt eine Engine im Hintergrund. Wurde sie inzwischen ersetzt, wird sie wieder beendet.
         Schlägt das Laden fehl (z. B. Grafiktreiber direkt nach der Anmeldung noch nicht bereit), wird es
         mit wachsender Pause erneut versucht."""
-        s = self.cfg.stufen[self.stufe]
-        hinweis = "NPU: erstes Laden kann einige Minuten dauern" if s.geraet == "NPU" else None
+        hinweis = "NPU: erstes Laden kann einige Minuten dauern" if engine.geraet.startswith("NPU") else None
         for versuch in range(1, versuche + 1):
             if engine is not self.engine or self.pausiert or not self._laeuft:
                 engine.stop()
                 return
-            self._zeige_laden(hinweis or f"Lade {STUFEN_TEXT.get(self.stufe, self.stufe)} …")
+            self._zeige_laden(hinweis or f"Lade {self.beschreibung()} …")
             try:
                 engine.start()
                 break
@@ -146,7 +162,7 @@ class App:
         if engine is not self.engine or self.pausiert:
             engine.stop()
             return
-        self._zurueck_zu_bereit(detail=f"{STUFEN_TEXT.get(self.stufe, self.stufe)} geladen")
+        self._zurueck_zu_bereit(detail=f"{self.beschreibung()} geladen")
 
     def _zeige_laden(self, detail: str):
         """Lade-Hinweis zeigen, ohne das rote Aufnahme-Symbol zu überdecken (Laden nach Leerlauf läuft,
@@ -169,7 +185,7 @@ class App:
         self._entladen = True
         with self._engine_lock:
             alt = self.engine
-            self.engine = self._neue_engine(self.stufe)
+            self.engine = self._neue_engine()
         threading.Thread(target=alt.stop, name="stoppen", daemon=True).start()
         self.tray.setze("ruht", "Modell entladen (Leerlauf) – lädt beim nächsten Diktat")
         return True
@@ -185,7 +201,7 @@ class App:
         log.warning("Starte Whisper neu: %s", grund)
         with self._engine_lock:
             alt = self.engine
-            self.engine = self._neue_engine(self.stufe)
+            self.engine = self._neue_engine()
         threading.Thread(target=alt.stop, name="stoppen", daemon=True).start()
         if self.pausiert:
             return
@@ -197,26 +213,76 @@ class App:
     def _starte_engine(self):
         threading.Thread(target=self._lade, args=(self.engine,), name="laden", daemon=True).start()
 
-    def waehle_stufe(self, name: str):
-        if name == self.stufe and (self.engine.bereit or self.tray.zustand == "laedt"):
-            return
-        log.info("Wechsle Stufe: %s -> %s", self.stufe, name)
+    def _wechsle(self, modell: str | None = None, geraet_wahl: str | None = None):
+        """Modell und/oder Recheneinheit wechseln: alte Engine weg, neue laden, Wahl in config.toml speichern."""
+        neu_modell = modell or self.modell
+        neu_wahl = geraet_wahl or self.geraet_wahl
+        neu_geraet = geraete.loese_geraet(neu_wahl, self.recheneinheiten)
+        gleiche_engine = (neu_modell == self.modell and neu_geraet == self.geraet)
+        log.info("Wechsle: %s/%s -> %s/%s", self.modell, self.geraet_wahl, neu_modell, neu_wahl)
         with self._engine_lock:
             alt = self.engine
-            self.stufe = name
-            self.engine = self._neue_engine(name)
+            self.modell, self.geraet_wahl = neu_modell, neu_wahl
+            if not gleiche_engine:
+                self.engine = self._neue_engine()
+        try:
+            if modell:
+                speichere_modell(neu_modell)
+            if geraet_wahl:
+                speichere_geraet(neu_wahl)
+        except Exception:  # noqa: BLE001
+            log.exception("Auswahl konnte nicht in config.toml gespeichert werden")
+        if gleiche_engine and (alt.bereit or self.tray.zustand == "laedt" or self.pausiert):
+            self.tray.setze(self.tray.zustand)  # z. B. "auto" -> "GPU": gleiche Einheit, nur Anzeige
+            return
+        if gleiche_engine:  # z. B. nach einem Fehler: neu laden
+            with self._engine_lock:
+                self.engine = self._neue_engine()
         threading.Thread(target=alt.stop, name="stoppen", daemon=True).start()
         self.hotkey.erneuern()
         self._entladen = False
         self._letzte_aktivitaet = time.monotonic()
-        try:
-            speichere_stufe(name)
-        except Exception:  # noqa: BLE001
-            log.exception("Stufe konnte nicht in config.toml gespeichert werden")
         if not self.pausiert:
             self._starte_engine()
         else:
             self.tray.setze("pausiert")
+
+    def waehle_modell(self, name: str):
+        if name in self.modelle:
+            self._wechsle(modell=name)
+
+    def waehle_geraet(self, wahl: str):
+        self._wechsle(geraet_wahl=wahl)
+
+    def mikrofone(self) -> list[str]:
+        return self._mikrofone
+
+    def aktuelles_mikrofon(self) -> str:
+        """Name des Mikrofons, das bei der nächsten Aufnahme benutzt wird."""
+        if self.recorder.mikrofon and self.recorder.mikrofon in self._mikrofone:
+            return self.recorder.mikrofon
+        return self.recorder.standard_geraet()
+
+    def waehle_mikrofon(self, name: str):
+        if name == self.recorder.mikrofon:
+            return
+        log.info("Mikrofon: %s -> %s", self.recorder.mikrofon or "Windows-Standard", name or "Windows-Standard")
+        try:
+            self.recorder.waehle(name)
+        except Exception:  # noqa: BLE001
+            log.exception("Mikrofon konnte nicht geöffnet werden")
+        try:
+            speichere_mikrofon(name)
+        except Exception:  # noqa: BLE001
+            log.exception("Mikrofon konnte nicht in config.toml gespeichert werden")
+        self.tray.setze(self.tray.zustand)
+
+    def _mikrofone_aktualisieren(self):
+        neu = geraete.mikrofone()
+        if neu != self._mikrofone:
+            log.info("Mikrofone: %s", ", ".join(neu) or "keine")
+            self._mikrofone = neu
+            self.tray.menue_neu_bauen()
 
     def waehle_modus(self, modus: str):
         if modus == self.modus:
@@ -244,7 +310,7 @@ class App:
             self.hotkey.eingeschaltet = True
             self.hotkey.erneuern()
             with self._engine_lock:
-                self.engine = self._neue_engine(self.stufe)
+                self.engine = self._neue_engine()
             self._starte_engine()
         else:
             log.info("Pausieren: Shortcut aus, Modell entladen")
@@ -271,10 +337,13 @@ class App:
         oeffne_im_editor(LOG_DATEI)
 
     def autostart_aktiv(self) -> bool:
-        try:
-            return autostart.ist_aktiv()
-        except Exception:  # noqa: BLE001
-            return False
+        """Wird bei jedem Öffnen des Menüs gefragt: einmal abfragen, danach zwischenspeichern."""
+        if self._autostart is None:
+            try:
+                self._autostart = autostart.ist_aktiv()
+            except Exception:  # noqa: BLE001
+                self._autostart = False
+        return self._autostart
 
     def umschalten_autostart(self):
         try:
@@ -286,6 +355,7 @@ class App:
                 log.info("Autostart eingeschaltet: %s", autostart.befehl())
         except Exception:  # noqa: BLE001
             log.exception("Autostart konnte nicht geändert werden")
+        self._autostart = None  # neu abfragen
         self.tray.setze(self.tray.zustand)
 
     def neustart(self):
@@ -318,8 +388,8 @@ class App:
                     # Damit man im Log sieht, bis wann das Tool lief, falls es einmal spurlos verschwindet
                     zustand = ("pausiert" if self.pausiert else "Modell entladen" if self._entladen
                                else "Modell geladen" if self.engine.bereit else "Modell lädt")
-                    log.info("Lebenszeichen: läuft seit %.1f h, %s, Stufe %s, Hook-Ausfälle %d",
-                             (jetzt - gestartet) / 3600, zustand, self.stufe, self.hotkey.hook_ausfaelle)
+                    log.info("Lebenszeichen: läuft seit %.1f h, %s, %s, Hook-Ausfälle %d",
+                             (jetzt - gestartet) / 3600, zustand, self.beschreibung(), self.hotkey.hook_ausfaelle)
                     letztes_lebenszeichen = jetzt
                 if jetzt - letzte_hook > 300:
                     self.hotkey.erneuern()
@@ -328,8 +398,9 @@ class App:
                     if self.recorder.geraete_neu_laden():
                         neu = self.recorder.standard_geraet()
                         if neu != geraet:
-                            log.info("Mikrofon gewechselt: %s -> %s", geraet, neu)
+                            log.info("Windows-Standardmikrofon gewechselt: %s -> %s", geraet, neu)
                             geraet = neu
+                        self._mikrofone_aktualisieren()
                     letzte_geraete = jetzt
                 self.recorder.gesund()
                 self._pruefe_leerlauf(jetzt)
@@ -475,7 +546,7 @@ class App:
                 self.tray.detail = "Whisper hat sich verhaspelt – bitte nochmal diktieren"
                 return
             text, roh = text2, roh2
-        log.info("%.1f s Audio in %.2f s (%s) -> %d Zeichen%s", dauer, sek, self.stufe, len(text),
+        log.info("%.1f s Audio in %.2f s (%s) -> %d Zeichen%s", dauer, sek, self.beschreibung(), len(text),
                  "" if text == roh.strip() else " (bereinigt)")
         if not text:
             self.tray.detail = "Nichts erkannt"
@@ -508,8 +579,9 @@ class App:
                            (self._transkriptions_schleife, "transkription"),
                            (self._wartungs_schleife, "wartung")):
             threading.Thread(target=ziel, name=name, daemon=True).start()
-        log.info("Bereit: %s (Bedienung %s, Stufe %s, Leerlauf %s min%s)", self.bedien_hinweis(), self.modus,
-                 self.stufe, self.cfg.leerlauf_minuten or "aus", ", mit Wächter" if self.unter_waechter else "")
+        log.info("Bereit: %s (Bedienung %s, %s, Mikrofon %s, Leerlauf %s min%s)", self.bedien_hinweis(),
+                 self.modus, self.beschreibung(), self.aktuelles_mikrofon(), self.cfg.leerlauf_minuten or "aus",
+                 ", mit Wächter" if self.unter_waechter else "")
 
     def beenden(self):
         log.info("Beende …" if self.exit_code != EXIT_NEUSTART else "Neustart …")

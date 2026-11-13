@@ -65,19 +65,34 @@ NPU. Auf Rechnern ohne Intel-Grafik bleibt nur die CPU-Stufe.
 |---|---|
 | Strg+Y **halten** | Aufnahme (Symbol rot), beim Loslassen wird transkribiert (gelb) und eingefügt |
 | Strg+Y **kurz tippen** | Daueraufnahme startet, nochmal tippen = fertig |
-| Rechtsklick auf das Symbol | Menü: Pausieren, Stufe, Bedienung, Fachwörter, Einstellungen, Log, Autostart, Beenden |
+| Rechtsklick auf das Symbol | Menü: Pausieren, Modell, Recheneinheit, Mikrofon, Bedienung, Fachwörter, Einstellungen, Log, Autostart, Beenden |
 
 Solange das Tool läuft, ist Strg+Y in anderen Programmen nicht als „Wiederholen“ verfügbar. Pausieren gibt
 die Taste frei. Der Shortcut ist in `config.toml` änderbar.
 
-### Stufen
+### Modell, Recheneinheit und Mikrofon (im Menü wählbar)
 
-| Stufe | Modell | Gerät | Wofür |
-|---|---|---|---|
-| Schnell | large-v3-turbo (int8) | Intel-Grafik | Standard |
-| Leise | large-v3-turbo (int8) | NPU | sparsam, Lüfter bleibt ruhig. Das erste Laden dauert einige Minuten |
-| Genau | large-v3 (int8) | Intel-Grafik | schwierige Aufnahmen, etwas langsamer |
-| Notfall | large-v3-turbo (int8) | CPU | wenn die Grafik Probleme macht |
+**Modell**
+
+| Modell | Wofür |
+|---|---|
+| Turbo – schnell (large-v3-turbo, int8) | Standard, fast so genau wie Large-v3 |
+| Large-v3 – genau (large-v3, int8) | schwierige Aufnahmen, etwas langsamer |
+
+**Recheneinheit:** Im Menü stehen nur die Einheiten, die auf dem Rechner wirklich vorhanden sind, mit Namen.
+
+| Auswahl | Bedeutung |
+|---|---|
+| Automatisch | Grafik, wenn vorhanden, sonst CPU (Standard) |
+| Grafik | am schnellsten (Intel-Grafik) |
+| NPU | sparsam, Lüfter bleibt ruhig. Das erste Laden dauert einige Minuten |
+| CPU | geht überall, aber deutlich langsamer |
+
+Ist eine gewählte Einheit nicht (mehr) vorhanden, nimmt das Tool automatisch die beste vorhandene.
+
+**Mikrofon:** „Windows-Standard“ folgt dem Standard-Eingabegerät von Windows. Oder du wählst ein bestimmtes
+Mikrofon, z. B. das Headset. Ist es gerade nicht angeschlossen, nimmt das Tool den Windows-Standard und
+wechselt zurück, sobald es wieder da ist. Neu angesteckte Mikrofone erscheinen nach spätestens einer Minute im Menü.
 
 ### Symbolfarben
 
@@ -91,6 +106,9 @@ Mond = Modell im Leerlauf entladen (lädt beim nächsten Diktat nach) · schwarz
 | Schlüssel | Standard | Bedeutung |
 |---|---|---|
 | `shortcut` | `ctrl+y` | z. B. `ctrl+alt+space`, `f9`, `ctrl+shift` |
+| `[modell] name` | `large-v3` | `turbo` oder `large-v3` (auch im Menü) |
+| `[modell] geraet` | `auto` | `auto`, `GPU`, `NPU`, `CPU` (auch im Menü) |
+| `mikrofon` | `""` | leer = Windows-Standard, sonst Gerätename (auch im Menü) |
 | `modus` | `beides` | `halten`, `umschalten` oder `beides` |
 | `einfuegen` | `tippen` | `tippen` (Zwischenablage bleibt unberührt) oder `zwischenablage` |
 | `leerlauf_minuten` | `30` | Modell nach so vielen Minuten ohne Diktat entladen, `0` = nie |
@@ -125,6 +143,7 @@ diktat/            das Tool
   engine.py        Whisper über OpenVINO GenAI in einem eigenen Prozess
   inserter.py      Text einfügen (Tippen oder Zwischenablage)
   tray.py          Taskleisten-Symbol und Menü
+  geraete.py       vorhandene Recheneinheiten (OpenVINO) und Mikrofone
   waechter.py      startet das Tool nach Abstürzen neu
   autostart.py     Aufgabe in der Windows-Aufgabenplanung
 start.pyw          Startpunkt für Autostart/Verknüpfung (Wächter → Tool)
@@ -153,8 +172,9 @@ Noch nicht „herunterladen und loslegen“. Dafür fehlen:
 1. **Installer oder `.exe`:** Heute braucht es uv, Python und Befehle im Terminal. Einige Stellen sind noch auf
    den Entwickler-Laptop zugeschnitten (die Verknüpfung `Whisper Diktat starten.lnk` und die erste Zeile in
    `start.pyw`).
-2. **Automatische Geräteauswahl:** Auf Rechnern ohne Intel-Grafik sollte das Tool von selbst die CPU-Stufe nehmen.
-3. **Freigabe durch die IT** wegen des Virenscanners (siehe Fehlersuche).
+2. **Freigabe durch die IT** wegen des Virenscanners (siehe Fehlersuche).
+
+Die Recheneinheit wählt das Tool schon selbst: Ohne Intel-Grafik nimmt es automatisch die CPU.
 
 Alternative: Whisper zentral auf einem Server, die Laptops schicken nur die Aufnahme. Dafür braucht der Server
 eine CPU mit AVX2 oder eine Grafikkarte.

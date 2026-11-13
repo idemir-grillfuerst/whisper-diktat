@@ -177,8 +177,8 @@ def test_bereinigen():
 
 def test_config():
     cfg = lade_config()
-    pruefe("config.toml lädt", cfg.shortcut == "ctrl+y" and cfg.stufe.geraet == "GPU")
-    pruefe("4 Stufen definiert", set(cfg.stufen) == {"schnell", "leise", "genau", "notfall"})
+    pruefe("config.toml lädt", cfg.shortcut == "ctrl+y" and cfg.modell in cfg.modelle)
+    pruefe("2 Modelle definiert", set(cfg.modelle) == {"turbo", "large-v3"})
     p = fachwort_prompt()
     pruefe("Fachwort-Prompt enthält Claude", p is not None and "Claude" in p and "#" not in p)
 
@@ -195,7 +195,7 @@ def test_engine():
     from diktat.engine import Engine
 
     cfg = lade_config()
-    e = Engine(cfg.stufe.repo, cfg.stufe.geraet, cfg.sprache)
+    e = Engine(cfg.modelle["turbo"].repo, "GPU", cfg.sprache)
     t0 = time.perf_counter()
     e.start()
     print(f"      Modell geladen in {time.perf_counter() - t0:.1f} s")

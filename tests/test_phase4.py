@@ -55,8 +55,8 @@ class FakeEngine:
 
 
 def neue_app(modus):
-    hauptmodul.speichere_stufe = lambda *a: None
-    hauptmodul.speichere_modus = lambda *a: None
+    for f in ("speichere_modell", "speichere_geraet", "speichere_mikrofon", "speichere_modus"):
+        setattr(hauptmodul, f, lambda *a: None)
     app = hauptmodul.App()
     app.recorder = FakeRecorder()
     app.modus = modus
@@ -177,10 +177,9 @@ def test_leerlauf_echt():
 
     eingefuegt = []
     hauptmodul.fuege_ein = lambda text, modus: eingefuegt.append(text)  # nicht ins aktive Fenster tippen
-    hauptmodul.speichere_stufe = lambda *a: None
     app = hauptmodul.App()
-    app.stufe = "schnell"
-    app.engine = app._neue_engine("schnell")
+    app.modell, app.geraet_wahl = "turbo", "GPU"
+    app.engine = app._neue_engine()
     app._lade(app.engine)
     app.cfg.leerlauf_minuten = 1
     app._letzte_aktivitaet = time.monotonic() - 120
