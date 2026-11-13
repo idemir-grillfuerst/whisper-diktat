@@ -9,7 +9,7 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import PROJEKT
+from . import PROJEKT, tomltext
 
 log = logging.getLogger("diktat")
 
@@ -160,36 +160,15 @@ def fachwort_prompt(max_zeichen: int = 600) -> str | None:
 
 
 def _toml_text(wert: str) -> str:
-    return '"' + wert.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    return tomltext._toml_text(wert)
 
 
-def speichere_wert(abschnitt: str, schluessel: str, wert: str, datei=None) -> None:
-    """Setzt in config.toml `schluessel = "wert"` im Abschnitt [abschnitt]. Fehlt die Zeile, wird sie am Ende des
-    Abschnitts ergänzt. Kommentare und alles andere bleiben unverändert."""
+def speichere_wert(abschnitt: str, schluessel: str, wert, datei=None) -> None:
+    """Setzt in config.toml `schluessel = wert` im Abschnitt [abschnitt]; fehlt die Zeile oder der Abschnitt, wird
+    sie ergänzt. Kommentare und alles andere bleiben unverändert."""
     datei = datei or CONFIG_DATEI
-    zeilen = datei.read_text(encoding="utf-8").splitlines(keepends=True)
-    neu = f"{schluessel} = {_toml_text(wert)}\n"
-    aktuell, ende_abschnitt = None, None
-    for i, z in enumerate(zeilen):
-        s = z.strip()
-        if s.startswith("[") and s.endswith("]"):
-            if aktuell == f"[{abschnitt}]" and ende_abschnitt is None:
-                ende_abschnitt = i
-            aktuell = s
-        elif aktuell == f"[{abschnitt}]" and not s.startswith("#") and s.split("=")[0].strip() == schluessel:
-            zeilen[i] = neu
-            break
-    else:
-        if aktuell == f"[{abschnitt}]" and ende_abschnitt is None:
-            ende_abschnitt = len(zeilen)
-        if ende_abschnitt is None:
-            raise ValueError(f"In config.toml fehlt der Abschnitt [{abschnitt}]")
-        while ende_abschnitt > 0 and not zeilen[ende_abschnitt - 1].strip():
-            ende_abschnitt -= 1  # vor der Leerzeile zum nächsten Abschnitt einfügen
-        if ende_abschnitt > 0 and not zeilen[ende_abschnitt - 1].endswith("\n"):
-            zeilen[ende_abschnitt - 1] += "\n"
-        zeilen.insert(ende_abschnitt, neu)
-    datei.write_text("".join(zeilen), encoding="utf-8")
+    datei.write_text(tomltext.setze(datei.read_text(encoding="utf-8"), abschnitt, schluessel, wert),
+                     encoding="utf-8")
 
 
 def speichere_modell(name: str, datei=None) -> None:

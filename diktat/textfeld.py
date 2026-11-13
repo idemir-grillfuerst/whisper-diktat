@@ -18,6 +18,7 @@ from pathlib import Path
 from . import inserter, marker, uia
 from .befehle import pruefe_tasten
 from .config import TEXTFELDER_DATEI, _toml_text, aus_vorlage
+from .tomltext import tabellen_pfad
 from .uia import UiaFehlt
 
 log = logging.getLogger("diktat")
@@ -165,31 +166,16 @@ def _block(schl: str, regel: Regel) -> list[str]:
     return zeilen
 
 
-def _tabellen_pfad(zeile: str) -> tuple[str, ...] | None:
-    """Pfad eines TOML-Tabellenkopfs, egal wie geschrieben: [regeln.claude], [regeln."claude"]  # Kommentar …"""
-    if not zeile.lstrip().startswith("[") or zeile.lstrip().startswith("[["):
-        return None
-    try:
-        d = tomllib.loads(zeile.strip() + "\n")
-    except tomllib.TOMLDecodeError:
-        return None
-    pfad = []
-    while isinstance(d, dict) and len(d) == 1:
-        (schl, d), = d.items()
-        pfad.append(schl)
-    return tuple(pfad)
-
-
 def setze_regel(text: str, schl: str, regel: Regel | None) -> str:
     """Ersetzt, ergänzt (regel) oder entfernt (None) nur den Block [regeln."schl"]. Der Block reicht bis zum nächsten
     Tabellenkopf; seine Wertzeilen werden ersetzt, Kommentare und Leerzeilen darin bleiben stehen."""
     zeilen = text.splitlines()
     neu, i, ersetzt = [], 0, False
     while i < len(zeilen):
-        if _tabellen_pfad(zeilen[i]) == ("regeln", schl):
+        if tabellen_pfad(zeilen[i]) == ("regeln", schl):
             i += 1
             behalten = []
-            while i < len(zeilen) and _tabellen_pfad(zeilen[i]) is None:
+            while i < len(zeilen) and tabellen_pfad(zeilen[i]) is None:
                 if not zeilen[i].strip() or zeilen[i].lstrip().startswith("#"):
                     behalten.append(zeilen[i])
                 i += 1
