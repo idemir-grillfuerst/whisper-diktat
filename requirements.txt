@@ -5,3 +5,4 @@ numpy
 sounddevice                  # Mikrofon
 pystray                      # Symbol in der Taskleiste
 pillow
+comtypes                     # Windows-Bedienungshilfe (Sprachbefehl „Textfeld“)

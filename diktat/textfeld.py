@@ -10,12 +10,15 @@ uia.py und wird hier über die Modulvariable `uia` benutzt, damit Tests ihn erse
 """
 import logging
 import re
+import time
 import tomllib
 from dataclasses import dataclass, fields
 from pathlib import Path
 
+from . import inserter, uia
 from .befehle import pruefe_tasten
 from .config import TEXTFELDER_DATEI, _toml_text, aus_vorlage
+from .uia import UiaFehlt
 
 log = logging.getLogger("diktat")
 
@@ -211,3 +214,131 @@ def lade_regeln(datei: Path | None = None) -> tuple[dict[str, Regel], str | None
         log.warning("Textfeld-Regeln aus – %s", fehler)
     _CACHE[datei] = (mtime, regeln, fehler)
     return regeln, fehler
+
+
+# --- Aktionen -----------------------------------------------------------------------------------------------------
+REGEL_DATEI: Path | None = None   # None = textfelder.toml im Projektordner (Tests biegen das um)
+OHNE_COMTYPES = "Textfeld braucht das Paket comtypes – Installation aktualisieren (install.ps1)"
+
+
+@dataclass
+class Antwort:
+    ok: bool
+    meldung: str
+
+
+def _schluessel_fuer(hwnd: int) -> str:
+    prozess = uia.prozessname(hwnd)
+    return schluessel(prozess, uia.adresse(hwnd) if prozess in BROWSER else None)
+
+
+def _regeln() -> dict[str, Regel]:
+    return lade_regeln(REGEL_DATEI)[0]
+
+
+def _schreibe(schl: str, regel: Regel | None) -> None:
+    datei = REGEL_DATEI or TEXTFELDER_DATEI
+    if REGEL_DATEI is None:
+        aus_vorlage(datei)
+    alt = datei.read_text(encoding="utf-8") if datei.exists() else ""
+    datei.write_text(setze_regel(alt, schl, regel), encoding="utf-8")
+    _CACHE.pop(datei, None)
+
+
+def _fokus_setzen(el, typ: str) -> None:
+    if not uia.fokussiere(el):
+        inserter.klicke(*uia.mitte(el))
+    if typ == "Edit":  # bei ganzen Dokumenten (z. B. Mailtext mit Zitat) nicht ans Ende springen
+        inserter.druecke("ctrl+end")
+
+
+def textfeld(frist_s: float = 1.5, takt_s: float = 0.3) -> Antwort:
+    """Cursor ins Eingabefeld des Fensters vorne setzen."""
+    try:
+        hwnd = uia.fenster_vorne()
+        schl = _schluessel_fuer(hwnd)
+        regel = _regeln().get(schl)
+        rect = uia.fenster_rect(hwnd)
+        if regel and regel.taste:
+            inserter.druecke(regel.taste)
+            return Antwort(True, f"Textfeld per Taste {regel.taste} ({schl})")
+        if regel and regel.x is not None and regel.y is not None and not (regel.name or regel.automation_id):
+            l, o, r, u = rect
+            inserter.klicke(round(l + regel.x * (r - l)), round(o + regel.y * (u - o)))
+            inserter.druecke("ctrl+end")
+            return Antwort(True, f"Textfeld per Klickposition ({schl})")
+        ende = time.monotonic() + frist_s
+        while True:
+            liste = uia.kandidaten(hwnd)
+            treffer = None
+            if regel:
+                treffer = next(((k, e) for k, e in liste if passt(regel, k)), None)
+            if treffer is None:
+                beste = waehle([k for k, _ in liste], rect)
+                treffer = next(((k, e) for k, e in liste if k is beste), None) if beste else None
+            if treffer is not None:
+                break
+            if time.monotonic() >= ende:
+                log.info("Kein Textfeld gefunden (%s, %d Kandidaten)", schl, len(liste))
+                return Antwort(False, f"Kein Textfeld gefunden ({schl})")
+            time.sleep(takt_s)
+        kand, el = treffer
+        _fokus_setzen(el, kand.typ)
+        log.info("Textfeld: %s „%s“ (%s)", kand.typ, kand.name, schl)
+        return Antwort(True, f"Textfeld: {kand.name or kand.typ} ({schl})")
+    except UiaFehlt:
+        return Antwort(False, OHNE_COMTYPES)
+    except Exception as e:  # noqa: BLE001
+        log.exception("Textfeld fehlgeschlagen")
+        return Antwort(False, f"Textfeld ging nicht: {e}"[:100])
+
+
+def textfeld_merken() -> Antwort:
+    """Feld unter der Maus (ersatzweise die Mausposition) als Regel für Programm/Website unter der Maus merken."""
+    try:
+        hwnd = uia.fenster_unter_maus()
+        schl = _schluessel_fuer(hwnd)
+        unter = uia.kandidat_unter_maus()
+        regel = regel_aus_kandidat(unter[0]) if unter else None
+        if regel is None:
+            mx, my = uia.maus_position()
+            l, o, r, u = uia.fenster_rect(hwnd)
+            if r <= l or u <= o:
+                return Antwort(False, f"Textfeld merken ging nicht: Fenster unbekannt ({schl})")
+            regel = Regel(x=round(min(1.0, max(0.0, (mx - l) / (r - l))), 4),
+                          y=round(min(1.0, max(0.0, (my - o) / (u - o))), 4))
+            was = f"Position {regel.x:.0%} / {regel.y:.0%}"
+        else:
+            was = regel.name or regel.automation_id
+        _schreibe(schl, regel)
+        log.info("Textfeld gemerkt für %s: %s", schl, regel)
+        return Antwort(True, f"Textfeld gemerkt für {schl}: {was}")
+    except UiaFehlt:
+        return Antwort(False, OHNE_COMTYPES)
+    except Exception as e:  # noqa: BLE001
+        log.exception("Textfeld merken fehlgeschlagen")
+        return Antwort(False, f"Textfeld merken ging nicht: {e}"[:100])
+
+
+def textfeld_vergessen() -> Antwort:
+    """Regel für Programm/Website des Fensters vorne löschen."""
+    try:
+        schl = _schluessel_fuer(uia.fenster_vorne())
+        if schl not in _regeln():
+            return Antwort(False, f"Keine Regel für {schl}")
+        _schreibe(schl, None)
+        log.info("Textfeld-Regel gelöscht für %s", schl)
+        return Antwort(True, f"Textfeld-Regel gelöscht für {schl}")
+    except UiaFehlt:
+        return Antwort(False, OHNE_COMTYPES)
+    except Exception as e:  # noqa: BLE001
+        log.exception("Textfeld vergessen fehlgeschlagen")
+        return Antwort(False, f"Textfeld vergessen ging nicht: {e}"[:100])
+
+
+def vorwaermen() -> None:
+    """Beim Aufnahmestart: Fenster vorne einmal abfragen, damit Chromium seine Bedienungshilfe einschaltet."""
+    try:
+        uia.vorwaermen(uia.fenster_vorne())
+    except Exception:  # noqa: BLE001 – Vorwärmen ist nur eine Hilfe
+        pass
