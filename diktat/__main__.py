@@ -27,6 +27,7 @@ from .config import (CONFIG_DATEI, FACHWORT_DATEI, aus_vorlage, fachwort_prompt,
 from . import geraete
 from .engine import Engine
 from .hotkey import PushToTalk
+from .maus import MausTaste, parse_maustaste
 from .inserter import fuege_ein
 from .recorder import RATE, Recorder
 from .tray import Tray
@@ -110,6 +111,11 @@ class App:
         self.ereignisse: queue.Queue = queue.Queue()
         self.auftraege: queue.Queue = queue.Queue()
         self.hotkey = PushToTalk(self.cfg.shortcut, self.ereignisse.put_nowait)
+        taste = parse_maustaste(self.cfg.maustaste)
+        self.maus = (MausTaste(taste, self.ereignisse.put_nowait, halten_s=self.cfg.tipp_grenze_s,
+                               max_s=self.cfg.max_aufnahme_s) if taste else None)
+        self.eingaben = [self.hotkey] + ([self.maus] if self.maus else [])
+        self._maus_aufnahme = False     # laufende Aufnahme kam von der Maustaste
         self.modus = self.cfg.modus
         self._autostart: bool | None = None
         self.tray = Tray(self, self.cfg.shortcut)
@@ -239,7 +245,7 @@ class App:
             with self._engine_lock:
                 self.engine = self._neue_engine()
         threading.Thread(target=alt.stop, name="stoppen", daemon=True).start()
-        self.hotkey.erneuern()
+        self.hooks_erneuern()
         self._entladen = False
         self._letzte_aktivitaet = time.monotonic()
         if not self.pausiert:
@@ -297,9 +303,16 @@ class App:
 
     def bedien_hinweis(self) -> str:
         k = self.cfg.shortcut.upper()
-        return {"halten": f"{k} halten zum Diktieren",
+        text = {"halten": f"{k} halten zum Diktieren",
                 "umschalten": f"{k} tippen = Start/Stopp",
                 "beides": f"{k} halten oder kurz tippen"}[self.modus]
+        if self.maus:
+            text += " · " + {"mitte": "Mausrad", "x1": "Maustaste 4", "x2": "Maustaste 5"}[self.maus.taste] + " halten"
+        return text
+
+    def hooks_erneuern(self):
+        for e in self.eingaben:
+            e.erneuern()
 
     def umschalten_pause(self):
         if self.pausiert:
@@ -307,17 +320,20 @@ class App:
             self.pausiert = False
             self._entladen = False
             self._letzte_aktivitaet = time.monotonic()
-            self.hotkey.eingeschaltet = True
-            self.hotkey.erneuern()
+            for e in self.eingaben:
+                e.eingeschaltet = True
+            self.hooks_erneuern()
             with self._engine_lock:
                 self.engine = self._neue_engine()
             self._starte_engine()
         else:
             log.info("Pausieren: Shortcut aus, Modell entladen")
             self.pausiert = True
-            self.hotkey.eingeschaltet = False
-            self.hotkey.aktiv = False
-            self.hotkey._vom_wachhund = False  # noqa: SLF001
+            for e in self.eingaben:
+                e.eingeschaltet = False
+                e.aktiv = False
+                e._vom_wachhund = False  # noqa: SLF001
+            self._maus_aufnahme = False
             self._dauer_aktiv = False
             self._release_ignorieren = False
             self._entladen = False
@@ -378,7 +394,7 @@ class App:
                 # war der Rechner dazwischen im Standby (oder die Uhr wurde gestellt, dann schadet es nicht).
                 if jetzt_wand - letzte_wand > 30:
                     log.info("Aufgewacht nach %.0f s (Standby?)", jetzt_wand - letzte_wand)
-                    self.hotkey.erneuern()
+                    self.hooks_erneuern()
                     if untaetig:
                         self.recorder.geraete_neu_laden()
                     if not self.pausiert and not self._entladen:
@@ -390,10 +406,10 @@ class App:
                     zustand = ("pausiert" if self.pausiert else "Modell entladen" if self._entladen
                                else "Modell geladen" if self.engine.bereit else "Modell lädt")
                     log.info("Lebenszeichen: läuft seit %.1f h, %s, %s, Hook-Ausfälle %d",
-                             (jetzt - gestartet) / 3600, zustand, self.beschreibung(), self.hotkey.hook_ausfaelle)
+                             (jetzt - gestartet) / 3600, zustand, self.beschreibung(), sum(e.hook_ausfaelle for e in self.eingaben))
                     letztes_lebenszeichen = jetzt
                 if jetzt - letzte_hook > 300:
-                    self.hotkey.erneuern()
+                    self.hooks_erneuern()
                     letzte_hook = jetzt
                 if jetzt - letzte_geraete > 60 and untaetig:
                     if self.recorder.geraete_neu_laden():
@@ -429,7 +445,30 @@ class App:
                 self.tray.setze("fehler", f"Mikrofon: {ex}"[:100])
 
     def _behandle_ereignis(self, e: str, jetzt: float):
-        """Bedienlogik für press/release/cancel je nach Modus (halten, umschalten, beides)."""
+        """Bedienlogik für press/release/cancel je nach Modus (halten, umschalten, beides).
+        Maustaste (maus_*): immer „halten“, unabhängig vom Modus."""
+        if e == "maus_press":
+            if self.recorder.laeuft:  # läuft schon eine Aufnahme über die Tastatur: Maus ignorieren
+                return
+            self._maus_aufnahme = True
+            self._letzte_aktivitaet = self._druck_zeit = self._start_zeit = jetzt
+            self.recorder.start()
+            self.tray.setze("aufnahme", "")
+            self._aufwecken()
+            return
+        if e in ("maus_release", "maus_cancel"):
+            if not self._maus_aufnahme:
+                return
+            self._maus_aufnahme = False
+            if e == "maus_release":
+                self._abschliessen(jetzt)
+            else:  # kurzer Klick: war kein Diktat, Klick wird nachgereicht
+                self.recorder.stop()
+                log.debug("Mausklick, kein Diktat")
+                self._zurueck_zu_bereit()
+            return
+        if self._maus_aufnahme:  # Tastatur während einer Maus-Aufnahme: ignorieren
+            return
         if e == "press":
             self._letzte_aktivitaet = jetzt
             if self._dauer_aktiv:  # Tippen während einer Daueraufnahme = Stopp
@@ -570,7 +609,8 @@ class App:
     # --- Start / Ende ----------------------------------------------------------------------
     def _setup(self, icon):
         icon.visible = True
-        self.hotkey.start()
+        for e in self.eingaben:
+            e.start()
         try:
             self.recorder.bereit_machen()
         except Exception:  # noqa: BLE001
@@ -587,7 +627,8 @@ class App:
     def beenden(self):
         log.info("Beende …" if self.exit_code != EXIT_NEUSTART else "Neustart …")
         self._laeuft = False
-        self.hotkey.stop()
+        for e in self.eingaben:
+            e.stop()
         self.recorder.schliessen()
         self.engine.stop()
         self.tray.stop()

@@ -192,8 +192,10 @@ def test_bereinigen():
 
 
 def test_config():
-    cfg = lade_config()
-    pruefe("config.toml lädt", cfg.shortcut == "ctrl+y" and cfg.modell in cfg.modelle)
+    cfg = lade_config()  # persönliche Datei: Werte sind individuell, nur Gültigkeit prüfen
+    pruefe("config.toml lädt", bool(cfg.shortcut) and cfg.modell in cfg.modelle)
+    vorlage = lade_config(PROJEKT / "config.beispiel.toml")
+    pruefe("Vorlage: Strg+Y, Maustaste aus", vorlage.shortcut == "ctrl+y" and vorlage.maustaste == "")
     pruefe("2 Modelle definiert", set(cfg.modelle) == {"turbo", "large-v3"})
     p = fachwort_prompt()
     pruefe("Fachwort-Prompt enthält Claude", p is not None and "Claude" in p and "#" not in p)

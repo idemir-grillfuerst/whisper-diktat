@@ -67,6 +67,7 @@ class Config:
     aufnahmen_speichern: bool
     mikrofon: str              # "" = Windows-Standard
     mikrofon_offen_halten: bool
+    maustaste: str             # "" = aus, "mitte" = Mausrad halten, "x1"/"x2" = Seitentasten
     modell: str                # Schlüssel in modelle
     geraet: str                # "auto", "GPU", "NPU", "CPU", "GPU.0" …
     modelle: dict
@@ -110,6 +111,7 @@ def lade_config(datei=None) -> Config:
         aufnahmen_speichern=bool(a.get("aufnahmen_speichern", False)),
         mikrofon=str(a.get("mikrofon", "")),
         mikrofon_offen_halten=bool(a.get("mikrofon_offen_halten", False)),
+        maustaste=str(a.get("maustaste", "")),
         modell=modell,
         geraet=str(geraet),
         modelle=modelle,

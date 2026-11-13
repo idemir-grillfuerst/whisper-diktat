@@ -11,6 +11,9 @@ sprache = "de"
 #   "umschalten" = einmal tippen = Start, nochmal tippen = Stopp
 #   "beides"     = lang halten wie "halten", kurz tippen startet eine Daueraufnahme bis zum nächsten Tippen
 modus = "beides"
+# Zusätzlich per Maus diktieren (Taste halten = Aufnahme, kurzer Klick bleibt ein normaler Klick):
+#   "" = aus, "mitte" = Mausrad, "x1" / "x2" = Seitentasten (Zurück/Vor)
+maustaste = ""
 # Bis zu dieser Drückdauer (Sekunden) gilt es im Modus "beides" als Tippen
 tipp_grenze_s = 0.4
 # Daueraufnahmen (Umschalten) enden spätestens nach so vielen Sekunden von selbst

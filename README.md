@@ -59,6 +59,7 @@ der Anmeldung, beim Entsperren und alle 10 Minuten, falls es nicht läuft.
 |---|---|
 | Strg+Y **halten** | Aufnahme (Symbol rot), beim Loslassen wird transkribiert (gelb) und eingefügt |
 | Strg+Y **kurz tippen** | Daueraufnahme startet, nochmal tippen = fertig |
+| **Mausrad halten** (wenn `maustaste = "mitte"`) | Aufnahme, loslassen = einfügen. Kurzer Mittelklick wirkt wie immer (z. B. Link in neuem Tab) |
 | Rechtsklick auf das Symbol | Menü: Pausieren, Modell, Recheneinheit, Mikrofon, Bedienung, Fachwörter, Einstellungen, Log, Autostart, Neu starten, Beenden |
 
 Solange das Tool läuft, ist Strg+Y in anderen Programmen nicht als „Wiederholen“ verfügbar. Pausieren gibt
@@ -106,6 +107,7 @@ in Git. Beim ersten Start entsteht sie aus der Vorlage `config.beispiel.toml`. G
 | `[modell] geraet` | `auto` | `auto`, `GPU`, `NPU`, `CPU` (auch im Menü) |
 | `mikrofon` | `""` | leer = Windows-Standard, sonst Gerätename (auch im Menü) |
 | `modus` | `beides` | `halten`, `umschalten` oder `beides` |
+| `maustaste` | `""` | zusätzlich per Maus diktieren: `mitte` (Mausrad halten), `x1`/`x2` (Seitentasten). Kurzer Klick bleibt ein normaler Klick, nur Auto-Scroll per Mausrad fällt weg |
 | `einfuegen` | `tippen` | `tippen` (Zwischenablage bleibt unberührt) oder `zwischenablage` |
 | `leerlauf_minuten` | `30` | Modell nach so vielen Minuten ohne Diktat entladen, `0` = nie |
 | `max_aufnahme_s` | `300` | Höchstdauer einer Daueraufnahme |
