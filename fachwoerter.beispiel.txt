@@ -1,0 +1,36 @@
+# Fachwörter, die Whisper richtig schreiben soll. Ein Begriff pro Zeile, # = Kommentar.
+# Whisper nutzt nur die ersten ca. 600 Zeichen (~200 Token). Wichtigste Begriffe nach oben.
+# Vorlage: Beim ersten Start wird daraus fachwoerter.txt (deine persönliche Liste, nicht in Git).
+# Eigene Namen, Firmen- und Produktbegriffe hier ergänzen, Unpassendes löschen.
+
+# KI
+Claude
+Claude Code
+Anthropic
+ChatGPT
+OpenAI
+Whisper
+OpenVINO
+LLM
+Prompt
+Token
+Agent
+MCP
+MCP-Server
+
+# IT / Entwicklung
+API
+Webhook
+Deploy
+VPS
+GitHub
+Pull Request
+Commit
+Branch
+Repository
+Docker
+
+# Büro
+Outlook
+Teams
+SharePoint

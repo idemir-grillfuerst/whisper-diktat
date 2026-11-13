@@ -1,11 +1,35 @@
-"""Einstellungen (config.toml) und Fachwortliste (fachwoerter.txt) laden."""
+"""Einstellungen (config.toml) und Fachwortliste (fachwoerter.txt) laden.
+
+Beide Dateien sind persönlich und nicht in Git. Im Repo liegen nur die Vorlagen config.beispiel.toml und
+fachwoerter.beispiel.txt. Fehlt eine persönliche Datei, wird sie beim ersten Zugriff aus der Vorlage angelegt.
+"""
+import shutil
 import tomllib
 from dataclasses import dataclass
+from pathlib import Path
 
 from . import PROJEKT
 
 CONFIG_DATEI = PROJEKT / "config.toml"
 FACHWORT_DATEI = PROJEKT / "fachwoerter.txt"
+VORLAGEN = {
+    CONFIG_DATEI: PROJEKT / "config.beispiel.toml",
+    FACHWORT_DATEI: PROJEKT / "fachwoerter.beispiel.txt",
+}
+
+
+def aus_vorlage(datei: Path, vorlage: Path | None = None) -> bool:
+    """Legt `datei` aus ihrer Vorlage an, falls sie fehlt. True = neu angelegt."""
+    vorlage = vorlage or VORLAGEN.get(datei)
+    if datei.exists() or vorlage is None or not vorlage.exists():
+        return False
+    shutil.copyfile(vorlage, datei)
+    return True
+
+
+def persoenliche_dateien_anlegen() -> list[Path]:
+    """config.toml und fachwoerter.txt aus den Vorlagen anlegen, soweit sie fehlen."""
+    return [d for d in VORLAGEN if aus_vorlage(d)]
 
 MODI = ("halten", "umschalten", "beides")
 
@@ -49,6 +73,8 @@ class Config:
 
 
 def lade_config(datei=None) -> Config:
+    if datei is None:
+        aus_vorlage(CONFIG_DATEI)
     raw = tomllib.loads((datei or CONFIG_DATEI).read_text(encoding="utf-8"))
     a = raw.get("allgemein", {})
     m = raw.get("modell", {})
@@ -92,6 +118,7 @@ def lade_config(datei=None) -> Config:
 
 def fachwort_prompt(max_zeichen: int = 600) -> str | None:
     """Baut aus fachwoerter.txt den initial_prompt für Whisper (oder None, wenn leer)."""
+    aus_vorlage(FACHWORT_DATEI)
     if not FACHWORT_DATEI.exists():
         return None
     woerter = []

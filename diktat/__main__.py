@@ -22,7 +22,7 @@ import numpy as np
 
 from . import PROJEKT, autostart
 from .waechter import EXIT_LAEUFT_SCHON, EXIT_NEUSTART, EXIT_OK
-from .config import (CONFIG_DATEI, FACHWORT_DATEI, fachwort_prompt, lade_config, speichere_modus,
+from .config import (CONFIG_DATEI, FACHWORT_DATEI, aus_vorlage, fachwort_prompt, lade_config, speichere_modus,
                      speichere_geraet, speichere_mikrofon, speichere_modell)
 from . import geraete
 from .engine import Engine
@@ -328,6 +328,7 @@ class App:
 
     # --- Menüpunkte ------------------------------------------------------------------------
     def oeffne_fachwoerter(self):
+        aus_vorlage(FACHWORT_DATEI)
         oeffne_im_editor(FACHWORT_DATEI)  # wird bei jedem Diktat neu gelesen
 
     def oeffne_einstellungen(self):

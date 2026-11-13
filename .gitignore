@@ -7,3 +7,15 @@ __pycache__/
 *.pyc
 # Audio (Sprachaufnahmen bleiben lokal, nicht in die Versionskontrolle)
 *.wav
+
+# Persönliche Dateien (werden beim ersten Start aus den *.beispiel-Vorlagen angelegt)
+config.toml
+fachwoerter.txt
+# Verknüpfungen zeigen auf rechnerabhängige Pfade, install.ps1 legt sie an
+*.lnk
+# Projektnotizen, Messungen und Experimente des Entwicklers (enthalten interne Diktate)
+CLAUDE.local.md
+MEMORY.md
+PLAN.md
+whisper-test/
+.claude/settings.local.json

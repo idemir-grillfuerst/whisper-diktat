@@ -1,0 +1,3 @@
+# Nur für Tests und Benchmarks (tests/ mit --engine), zusätzlich zu requirements.txt
+faster-whisper==1.2.1
+av<16                        # av 16+ entfernt metadata_errors, das faster-whisper 1.2.1 nutzt

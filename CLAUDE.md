@@ -1,26 +1,29 @@
 # whisper-diktat
 
 Lokales Diktier-Tool für Windows: läuft im Hintergrund, nimmt per globalem Shortcut über das Mikrofon auf,
-transkribiert lokal mit Whisper und fügt den Text dort ein, wo der Cursor steht. Audio verlässt den Laptop nie.
+transkribiert lokal mit Whisper (OpenVINO) und fügt den Text dort ein, wo der Cursor steht. Audio verlässt den
+Rechner nie.
+
+**Soll das Tool installiert werden: `INSTALL.md` lesen und befolgen.**
 
 ## Regeln für Claude in diesem Projekt
 - Antworten auf Deutsch.
-- Projektwissen, Entscheidungen und Messergebnisse in `MEMORY.md` in diesem Ordner festhalten,
+- Rechnerspezifisches (Pfade, Hardware, Notizen) steht in `CLAUDE.local.md`, falls vorhanden. Nicht in Git.
+- Projektwissen, Entscheidungen und Messergebnisse in `MEMORY.md` in diesem Ordner festhalten (nicht in Git),
   **nicht** im globalen Claude-Memory unter `~/.claude`.
-- Alles Projektbezogene liegt in diesem Ordner. Ausnahme: die Python-Umgebung (siehe unten).
+- Keine echten Tastatureingaben (SendInput) in automatischen Tests: Sie landen im aktiven Fenster des Nutzers.
+- Keine persönlichen Daten ins Repo: `config.toml`, `fachwoerter.txt`, Aufnahmen, Logs und Notizen sind in
+  `.gitignore`. Neue Standardwerte gehören in die Vorlagen `config.beispiel.toml` / `fachwoerter.beispiel.txt`.
 
 ## Umgebung
-- Laptop: HP EliteBook 8 G1i, Intel Core Ultra 7 255H (16 Kerne), 64 GB RAM, Intel Arc 140T (iGPU),
-  NPU „Intel AI Boost“, keine NVIDIA-Karte (kein CUDA).
-- Mikrofon: Yealink WDD60 Headset (Windows-Standardeingang).
-- Python-Umgebung: `%USERPROFILE%\.venvs\whisper` (Python 3.12 aus `%USERPROFILE%\.venvs\python`).
-  Aufruf: `%USERPROFILE%\.venvs\whisper\Scripts\python.exe`
-- Pakete: siehe `requirements.txt`. **`av<16` ist Pflicht**, weil av 16+ den Parameter `metadata_errors`
-  entfernt hat, den faster-whisper 1.2.1 nutzt.
-- uv: `%USERPROFILE%\AppData\Local\hermes\bin\uv.exe`
+- Python 3.12 in `%USERPROFILE%\.venvs\whisper` (Python selbst in `%USERPROFILE%\.venvs\python`), angelegt von
+  `install.ps1`. Aufruf: `%USERPROFILE%\.venvs\whisper\Scripts\python.exe`
+- Pakete: `requirements.txt` (Laufzeit), `requirements-test.txt` (Tests mit `--engine`). **`av<16` ist Pflicht**,
+  weil av 16+ den Parameter `metadata_errors` entfernt hat, den faster-whisper 1.2.1 nutzt.
+- Am schnellsten auf Intel-Grafik (Arc) oder NPU, sonst CPU.
 
 ## Aufbau
-- `diktat/`: das Tool. Start im Projektordner: `%USERPROFILE%\.venvs\whisper\Scripts\python.exe -m diktat`
+- `diktat/`: das Tool. Start im Projektordner: `python -m diktat`
   - `hotkey.py`: Win32 `WH_KEYBOARD_LL`-Hook, Push-to-Talk. Ereignisse press/release/cancel.
   - `recorder.py`: Mikrofon 16 kHz mono, nur während der Aufnahme offen
   - `engine.py`: OpenVINO-WhisperPipeline in einem **eigenen Prozess** (wegen GIL/Hook-Timeout und Treiberabstürzen)
@@ -31,29 +34,28 @@ transkribiert lokal mit Whisper und fügt den Text dort ein, wo der Cursor steht
   - `waechter.py`: startet das Tool neu, wenn es abstürzt (max. 5 Abstürze in 10 min), Log in `logs/waechter.log`
   - `autostart.py`: Aufgabe „whisper-diktat“ in der Windows-Aufgabenplanung (Anmeldung, Entsperren, alle 10 min),
     an/aus mit `python -m diktat.autostart an|aus|status`. Der alte HKCU\Run-Eintrag wird dabei entfernt.
-    Aus einer Claude-Sitzung starten: `schtasks /Run /TN whisper-diktat` (läuft dann unabhängig von der App).
-- Normaler Start: `Whisper Diktat starten.lnk` (→ `start.pyw` → Wächter). Zum Entwickeln: `python -m diktat` im Terminal.
-- Aus einer Claude-Sitzung unabhängig starten: `explorer.exe "%USERPROFILE%\Desktop\whisper-diktat\Whisper Diktat starten.lnk"`.
-  Ein Start aus einem Terminal-Tab heraus stirbt, sobald der Tab geschlossen wird.
-- Laufende Instanz für ein Update beenden: Menü „Beenden“ (Exit 0, der Wächter endet mit), oder alle python-Prozesse
-  hart beenden, deren Befehlszeile `diktat`, `start.pyw` oder `multiprocessing-fork` enthält.
-  - `geraete.py`: vorhandene Recheneinheiten (OpenVINO `available_devices`, einmal beim Start vor dem Hook) und
-    Mikrofone (nur Standard-Audioschnittstelle MME, Namen statt Nummern, weil Nummern sich ändern)
+  - `geraete.py`: vorhandene Recheneinheiten (OpenVINO `available_devices`) und Mikrofone (MME, Namen statt Nummern)
+  - `config.py`: lädt `config.toml`/`fachwoerter.txt`, legt sie beim ersten Zugriff aus den Vorlagen an
+  - `einrichten.py`: Einrichtung nach der Paketinstallation (Dateien, Geräte, Modell, Verknüpfungen, Autostart)
+- `install.ps1`: komplette Installation für den aktuellen Benutzer, siehe `INSTALL.md`.
+- `start.pyw` → Wächter → Tool. Die Verknüpfung `Whisper Diktat starten.lnk` legt `einrichten.py` an.
 - `config.toml`: Shortcut, `[modell] name` (turbo/large-v3) + `geraet` (auto/GPU/NPU/CPU), `mikrofon` ("" = Windows-
   Standard), Einfügemodus. Alte Dateien mit `[modell] stufe` werden beim Laden übersetzt. `fachwoerter.txt`: initial_prompt.
-- `tests/`: `test_kern`, `test_phase2 [--engine]`, `test_phase3`, `test_phase4 [--engine]`, `test_autostart`, `test_geraete` (jeweils `python -m tests.<name>`), ohne echte
-  Tastatureingaben. Außerdem `mikro_probe` (Stille-Messung am Mikrofon). Achtung: test_phase3 schreibt in `logs/waechter.log`.
-- `whisper-test/`: frühere Experimente und Benchmarks.
-- Keine echten Tastatureingaben (SendInput) in automatischen Tests: Sie landen im aktiven Fenster des Nutzers.
+- `tests/`: `test_kern`, `test_phase2 [--engine]`, `test_phase3`, `test_phase4 [--engine]`, `test_autostart`,
+  `test_geraete`, `test_einrichten` (jeweils `python -m tests.<name>`), ohne echte Tastatureingaben. Außerdem
+  `mikro_probe` (Stille-Messung am Mikrofon). Achtung: test_phase3 schreibt in `logs/waechter.log`.
+  `--engine` braucht `requirements-test.txt` und eine eigene Testaufnahme `whisper-test/test_de.wav` (nicht in Git).
+
+## Laufende Instanz
+- Beenden für ein Update: Menü „Beenden“ (Exit 0, der Wächter endet mit), oder alle python-Prozesse hart beenden,
+  deren Befehlszeile `diktat`, `start.pyw` oder `multiprocessing-fork` enthält.
+- Unabhängig starten: `schtasks /Run /TN whisper-diktat` (wenn Autostart an) oder die Verknüpfung per `explorer.exe`.
 
 ## Versionsstand (Git)
-- `main` = stabiler Stand. Tag `v0.3` = Phase 1–3 fertig. Neue Arbeit auf eigenen Branches, erst nach dem Praxistest mergen.
-- Nicht in Git: `.ov_cache/`, `logs/`, `aufnahmen/`, `*.wav` (Sprachaufnahmen bleiben lokal).
-- Zurückgehen: `git switch main` (oder `git checkout v0.3`), danach das Tool neu starten (siehe oben).
+- `main` = stabiler Stand, Tags `v0.x`. Neue Arbeit auf eigenen Branches, erst nach dem Praxistest mergen.
+- Zurückgehen: `git switch main` (oder `git checkout <tag>`), danach das Tool neu starten.
 
 ## Fallstricke
-- Die Claude-App leitet Schreibzugriffe auf `AppData\Roaming` in einen privaten Bereich um. Ein Python, das dort
-  von uv installiert wurde, ist im normalen Terminal unsichtbar. Python deshalb immer mit
-  `UV_PYTHON_INSTALL_DIR=%USERPROFILE%\.venvs\python` installieren.
 - Sehr lange Pfade (über 260 Zeichen) brechen pip/uv-Installationen. Umgebungen deshalb unter kurzen Pfaden anlegen.
-- Strg+Y ist in vielen Programmen für „Wiederholen“ belegt und taugt nicht als Shortcut.
+- Strg+Y ist in vielen Programmen für „Wiederholen“ belegt; solange das Tool läuft, bekommt das Programm es nicht.
+- Virenscanner können das Tool wegen Tastatur-Hook + SendInput als Keylogger einstufen.

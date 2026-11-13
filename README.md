@@ -38,26 +38,20 @@ Intel-Grafik bleibt nur die Recheneinheit CPU.
 
 ## Installation
 
-> **Stand heute:** Die Installation ist noch Handarbeit und auf den Entwickler-Laptop zugeschnitten.
-> Ein Installer bzw. eine fertige `.exe` für Kollegen ist noch nicht gebaut. Siehe „Weitergabe an Kollegen“ unten.
+Repo herunterladen (oder klonen), im Ordner PowerShell öffnen und:
 
-1. **uv installieren** (Python-Paketmanager): <https://docs.astral.sh/uv/>
-2. **Python 3.12 und Umgebung anlegen.** Die Umgebung bewusst unter einem kurzen Pfad anlegen, damit Windows
-   nicht an der Pfadlänge scheitert:
-   ```powershell
-   $env:UV_PYTHON_INSTALL_DIR = "$env:USERPROFILE\.venvs\python"
-   uv python install 3.12
-   uv venv --python 3.12 "$env:USERPROFILE\.venvs\whisper"
-   uv pip install --python "$env:USERPROFILE\.venvs\whisper\Scripts\python.exe" -r requirements.txt
-   ```
-3. **Einmal von Hand starten** (lädt beim ersten Mal das Modell herunter, ca. 1,6 GB):
-   ```powershell
-   & "$env:USERPROFILE\.venvs\whisper\Scripts\python.exe" -m diktat
-   ```
-   Unten rechts erscheint ein Mikrofon-Symbol: blau = lädt, grau = bereit.
-4. **Autostart einschalten:** Rechtsklick auf das Symbol → „Mit Windows starten“. Das Tool legt dann die
-   Aufgabe „whisper-diktat“ in der Windows-Aufgabenplanung an. Sie startet das Tool bei der Anmeldung, beim
-   Entsperren und alle 10 Minuten, falls es nicht läuft. Adminrechte sind nicht nötig.
+```powershell
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+Das Skript installiert uv, Python 3.12 und die Pakete im Benutzerordner. Dann lädt es das Modell, legt die
+Desktop-Verknüpfung an, schaltet den Autostart ein und startet das Tool. Adminrechte sind nicht nötig.
+Einzelheiten, Optionen, Update, Deinstallation und Fehlersuche: **[INSTALL.md](INSTALL.md)**.
+
+Mit Claude Code geht es auch so: „Installier mir whisper-diktat, Anleitung steht in INSTALL.md.“
+
+Der Autostart läuft über die Aufgabe „whisper-diktat“ in der Windows-Aufgabenplanung. Sie startet das Tool bei
+der Anmeldung, beim Entsperren und alle 10 Minuten, falls es nicht läuft.
 
 ## Bedienung
 
@@ -76,8 +70,8 @@ die Taste frei. Der Shortcut ist in `config.toml` änderbar.
 
 | Modell | Wofür |
 |---|---|
-| Turbo – schnell (large-v3-turbo, int8) | am schnellsten, fast so genau wie Large-v3 |
-| Large-v3 – genau (large-v3, int8) | voreingestellt, etwas genauer bei schwierigen Aufnahmen, etwas langsamer |
+| Turbo – schnell (large-v3-turbo, int8) | voreingestellt, am schnellsten, fast so genau wie Large-v3 |
+| Large-v3 – genau (large-v3, int8) | etwas genauer bei schwierigen Aufnahmen, etwas langsamer (wird beim ersten Wählen geladen, ca. 1,6 GB) |
 
 **Recheneinheit:** Im Menü stehen nur die Einheiten, die auf dem Rechner wirklich vorhanden sind, mit Namen.
 
@@ -101,12 +95,14 @@ Mond = Modell im Leerlauf entladen (lädt beim nächsten Diktat nach) · schwarz
 
 ## Einstellungen
 
-`config.toml` (Menü → „Einstellungen öffnen“, wirkt nach einem Neustart):
+`config.toml` (Menü → „Einstellungen öffnen“, wirkt nach einem Neustart). Die Datei ist persönlich und nicht
+in Git. Beim ersten Start entsteht sie aus der Vorlage `config.beispiel.toml`. Genauso entsteht
+`fachwoerter.txt` aus `fachwoerter.beispiel.txt`.
 
 | Schlüssel | Standard | Bedeutung |
 |---|---|---|
 | `shortcut` | `ctrl+y` | z. B. `ctrl+alt+space`, `f9`, `ctrl+shift` |
-| `[modell] name` | `large-v3` | `turbo` oder `large-v3` (auch im Menü) |
+| `[modell] name` | `turbo` | `turbo` oder `large-v3` (auch im Menü) |
 | `[modell] geraet` | `auto` | `auto`, `GPU`, `NPU`, `CPU` (auch im Menü) |
 | `mikrofon` | `""` | leer = Windows-Standard, sonst Gerätename (auch im Menü) |
 | `modus` | `beides` | `halten`, `umschalten` oder `beides` |
@@ -146,11 +142,13 @@ diktat/            das Tool
   geraete.py       vorhandene Recheneinheiten (OpenVINO) und Mikrofone
   waechter.py      startet das Tool nach Abstürzen neu
   autostart.py     Aufgabe in der Windows-Aufgabenplanung
+  einrichten.py    Einrichtung nach der Installation (Dateien, Geräte, Modell, Verknüpfungen, Autostart)
+install.ps1        Installation für den aktuellen Benutzer (siehe INSTALL.md)
 start.pyw          Startpunkt für Autostart/Verknüpfung (Wächter → Tool)
-config.toml        Einstellungen
-fachwoerter.txt    Fachwortliste
+config.beispiel.toml      Vorlage für config.toml (persönlich, nicht in Git)
+fachwoerter.beispiel.txt  Vorlage für fachwoerter.txt (persönlich, nicht in Git)
+requirements.txt   Pakete (requirements-test.txt zusätzlich für Tests)
 tests/             Tests (python -m tests.test_kern usw.), ohne echte Tastatureingaben
-whisper-test/      frühere Experimente und Benchmarks
 ```
 
 ## Verwendete Open-Source-Komponenten
@@ -167,14 +165,13 @@ whisper-test/      frühere Experimente und Benchmarks
 
 ## Weitergabe an Kollegen
 
-Noch nicht „herunterladen und loslegen“. Dafür fehlen:
+1. Repo freigeben (GitHub: Settings → Collaborators) oder als ZIP weitergeben.
+2. Der Kollege führt `install.ps1` aus oder lässt Claude Code das nach [INSTALL.md](INSTALL.md) erledigen.
+3. **Freigabe durch die IT** wegen des Virenscanners (siehe Fehlersuche) vorher klären.
 
-1. **Installer oder `.exe`:** Heute braucht es uv, Python und Befehle im Terminal. Einige Stellen sind noch auf
-   den Entwickler-Laptop zugeschnitten (die Verknüpfung `Whisper Diktat starten.lnk` und die erste Zeile in
-   `start.pyw`).
-2. **Freigabe durch die IT** wegen des Virenscanners (siehe Fehlersuche).
-
-Die Recheneinheit wählt das Tool schon selbst: Ohne Intel-Grafik nimmt es automatisch die CPU.
+Persönliches bleibt beim jeweiligen Nutzer: Einstellungen, Fachwortliste, Logs und Aufnahmen sind nicht in Git.
+Die Recheneinheit wählt das Tool selbst: Ohne Intel-Grafik nimmt es automatisch die CPU, dann dauert ein Diktat
+einige Sekunden.
 
 Alternative: Whisper zentral auf einem Server, die Laptops schicken nur die Aufnahme. Dafür braucht der Server
 eine CPU mit AVX2 oder eine Grafikkarte.

@@ -1,0 +1,50 @@
+# Einstellungen für whisper-diktat. Nach Änderungen das Tool neu starten.
+# Vorlage: Beim ersten Start wird daraus config.toml (deine persönliche Kopie, nicht in Git).
+# Modell, Recheneinheit, Mikrofon und Bedienung lassen sich auch im Menü (Rechtsklick auf das Symbol) wählen.
+
+[allgemein]
+# Tastenkombination. Beispiele: "ctrl+y", "ctrl+shift" (nur Zusatztasten), "ctrl+alt+space", "f9"
+shortcut = "ctrl+y"
+sprache = "de"
+# Bedienung:
+#   "halten"     = gedrückt halten = Aufnahme, loslassen = fertig
+#   "umschalten" = einmal tippen = Start, nochmal tippen = Stopp
+#   "beides"     = lang halten wie "halten", kurz tippen startet eine Daueraufnahme bis zum nächsten Tippen
+modus = "beides"
+# Bis zu dieser Drückdauer (Sekunden) gilt es im Modus "beides" als Tippen
+tipp_grenze_s = 0.4
+# Daueraufnahmen (Umschalten) enden spätestens nach so vielen Sekunden von selbst
+max_aufnahme_s = 300
+# Kürzere Aufnahmen werden ignoriert (Sekunden)
+min_dauer_s = 0.3
+# Nach so vielen Minuten ohne Diktat wird das Modell aus dem Speicher genommen (0 = nie).
+# Beim nächsten Diktat lädt es neu (ca. 4 s), während du schon sprichst.
+leerlauf_minuten = 30
+# "tippen" = Text wird als Tastatureingabe geschickt, die Zwischenablage bleibt unberührt
+# "zwischenablage" = Text über Strg+V einfügen, danach wird der alte Text der Zwischenablage wiederhergestellt
+einfuegen = "tippen"
+# Nach jedem Diktat ein Leerzeichen anhängen, damit mehrere Diktate nicht zusammenkleben
+leerzeichen_danach = true
+# Aufnahmen als WAV in aufnahmen/ speichern (nur zum Testen)
+aufnahmen_speichern = false
+# Mikrofon: "" = Windows-Standard, sonst der Gerätename wie im Menü
+mikrofon = ""
+# true = Mikrofon bleibt dauerhaft offen und nimmt ~0,4 s vor dem Tastendruck mit (Vorlauf).
+# Hilft, falls das Funkheadset nach einer Pause den Anfang verschluckt.
+# Nachteil: Windows zeigt dauerhaft "Mikrofon in Verwendung", das Headset bleibt aktiv (Akku).
+mikrofon_offen_halten = false
+
+[modell]
+# Modell, siehe [modelle.*]
+name = "turbo"
+# Recheneinheit: "auto" (Grafik, wenn vorhanden, sonst CPU), "GPU", "NPU" oder "CPU"
+# (bei mehreren Grafikkarten z. B. "GPU.0", "GPU.1")
+geraet = "auto"
+
+[modelle.turbo]
+titel = "Turbo – schnell"
+repo = "OpenVINO/whisper-large-v3-turbo-int8-ov"
+
+[modelle.large-v3]
+titel = "Large-v3 – genau"
+repo = "OpenVINO/whisper-large-v3-int8-ov"
