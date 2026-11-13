@@ -47,6 +47,22 @@ Outlook, Kalender, Teams, OneDrive, Office, Claude (App), Claude im Browser, Cha
 GitHub, WhatsApp, DeepL, Rechner, Editor, Explorer, Downloads, Dokumente, Einstellungen, Task Manager, dazu deine
 eigenen Einträge.
 
+## Textfeld: ohne Maus ins Eingabefeld
+
+| Sagen | Wirkung |
+|---|---|
+| Textfeld · Eingabefeld · Chatfeld | Cursor ins Eingabefeld des Fensters vorne (ans Ende des Texts) |
+| Textfeld, *Text* … Senden | ins Feld, Text einfügen, absenden, alles in einem Diktat |
+| Merke Textfeld | das Feld unter dem Mauszeiger merken (für dieses Programm bzw. diese Website) |
+| Vergiss Textfeld | die gemerkte Regel für das Programm/die Website vorne löschen |
+
+- Funktioniert in der Claude-App, in Teams und im Browser. Das Tool sucht das Feld über die Windows-Bedienungshilfe.
+- Nach „Textfeld,“ wird nur noch auf „Senden“ am Ende geachtet: „Textfeld, rückgängig“ schreibt das Wort hin.
+- Findet das Tool kein Feld, kommt eine **Windows-Meldung** und es wird **nichts** eingefügt, damit der Text nicht im
+  falschen Programm landet. Der diktierte Text steht dann im Log.
+- Gemerkte Felder stehen in `textfelder.toml` (Projektordner). Dort kann man auch von Hand eine Taste oder
+  Klickposition hinterlegen, siehe Kommentare in der Datei.
+
 ## Eigene Befehle
 Rechtsklick auf das Symbol → **„Befehle bearbeiten …“** öffnet `befehle.toml`. Änderungen gelten ab dem nächsten
 Diktat, ohne Neustart. Mehrere Schreibweisen mit `|` trennen.
