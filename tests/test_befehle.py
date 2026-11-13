@@ -213,6 +213,43 @@ def test_gib_aus():
             pruefe("Fehler beim Öffnen: weiter mit nächster Aktion", log_[-1] == ("taste", "esc"))
         except OSError:
             pruefe("Fehler beim Öffnen: weiter mit nächster Aktion", False)
+
+        from diktat.textfeld import Antwort
+        TF = Aktion("intern", "textfeld")
+        gemeldet = []
+        alt_intern = m.INTERN
+        m.INTERN = {"textfeld": lambda: Antwort(False, "Kein Textfeld gefunden (claude)"),
+                    "textfeld_merken": lambda: Antwort(True, "Textfeld gemerkt für claude: Prompt")}
+        log_.clear()
+        r = m.gib_aus(Ergebnis("Hallo", [Aktion("taste", "enter")], vorher=[TF]), "tippen", True,
+                      melde=gemeldet.append)
+        pruefe("Vorsilbe scheitert: nichts eingefügt, kein Enter", log_ == [])
+        pruefe("Vorsilbe scheitert: gemeldet", gemeldet == ["Kein Textfeld gefunden (claude)"])
+        pruefe("Vorsilbe scheitert: Meldung zurück", r == "Kein Textfeld gefunden (claude)")
+        m.INTERN["textfeld"] = lambda: (log_.append(("intern", "textfeld")), Antwort(True, "ok"))[1]
+        log_.clear()
+        gemeldet.clear()
+        m.gib_aus(Ergebnis("Hallo", [Aktion("taste", "enter")], vorher=[TF]), "tippen", True, melde=gemeldet.append)
+        pruefe("Reihenfolge Textfeld, Text, Enter",
+               log_ == [("intern", "textfeld"), ("text", "Hallo"), ("taste", "enter")])
+        pruefe("Erfolg beim Textfeld: keine Meldung", gemeldet == [])
+        m.gib_aus(Ergebnis("", [Aktion("intern", "textfeld_merken")]), "tippen", True, melde=gemeldet.append)
+        pruefe("merken wird bestätigt", gemeldet == ["Textfeld gemerkt für claude: Prompt"])
+        gemeldet.clear()
+        m.INTERN["textfeld"] = lambda: Antwort(False, "Kein Textfeld gefunden (x)")
+        m.gib_aus(Ergebnis("", [TF]), "tippen", True, melde=gemeldet.append)
+        pruefe("Textfeld allein scheitert: gemeldet", gemeldet == ["Kein Textfeld gefunden (x)"])
+
+        def kracht():
+            raise RuntimeError("kaputt")
+        m.INTERN["textfeld"] = kracht
+        log_.clear()
+        try:
+            m.gib_aus(Ergebnis("Hallo", [], vorher=[TF]), "tippen", True, melde=gemeldet.append)
+            pruefe("Ausnahme in Vorsilbe: nichts eingefügt", log_ == [])
+        except RuntimeError:
+            pruefe("Ausnahme in Vorsilbe: nichts eingefügt", False)
+        m.INTERN = alt_intern
     finally:
         m.fuege_ein, m.druecke, m.os.startfile = alt
 

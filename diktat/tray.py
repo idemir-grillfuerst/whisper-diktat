@@ -1,4 +1,6 @@
 """Symbol in der Taskleiste mit Menü. Die Farbe zeigt den Zustand."""
+import logging
+
 import pystray
 from PIL import Image, ImageDraw
 
@@ -142,6 +144,15 @@ class Tray:
             self.icon.update_menu()
         except Exception:  # noqa: BLE001  (Menü evtl. noch nicht da)
             pass
+
+    def melde(self, text: str) -> None:
+        """Windows-Meldung (Benachrichtigung am Symbol) und derselbe Text im Menü."""
+        self.detail = text[:120]
+        try:
+            self.icon.update_menu()
+            self.icon.notify(text[:250], "whisper-diktat")
+        except Exception:  # noqa: BLE001  (Meldungen sind nur Hinweise)
+            logging.getLogger("diktat").exception("Windows-Meldung ging nicht")
 
     def run(self, setup=None) -> None:
         self.icon.run(setup=setup)

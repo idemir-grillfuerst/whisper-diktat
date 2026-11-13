@@ -28,7 +28,8 @@ from . import geraete
 from .engine import Engine
 from .hotkey import PushToTalk
 from .maus import MausTaste, parse_maustaste
-from .befehle import Ergebnis, lade_befehle, zerlege
+from . import textfeld
+from .befehle import Aktion, Ergebnis, lade_befehle, zerlege
 from .inserter import druecke, fuege_ein
 from .recorder import RATE, Recorder
 from .tray import Tray
@@ -91,15 +92,47 @@ def zu_lang(text: str, dauer_s: float) -> bool:
     return len(text) > MAX_ZEICHEN_PRO_S * dauer_s + ZEICHEN_PUFFER
 
 
-def gib_aus(e: Ergebnis, einfuegen: str, leerzeichen_danach: bool) -> str | None:
-    """Text einfügen, danach die Aktionen ausführen (Enter, Tastenkürzel, Öffnen).
-    Rückgabe: Fehlermeldung, falls eine Aktion nicht ging, sonst None."""
+# Eingebaute Aktionen aus [aktionen] (in Tests ersetzbar)
+INTERN = {
+    "textfeld": lambda: textfeld.textfeld(),
+    "textfeld_merken": lambda: textfeld.textfeld_merken(),
+    "textfeld_vergessen": lambda: textfeld.textfeld_vergessen(),
+}
+
+
+def _intern(a: Aktion, melde) -> textfeld.Antwort:
+    """Eingebaute Aktion ausführen. Gemeldet wird jeder Fehlschlag und jede Bestätigung außer „Textfeld“ selbst."""
+    log.info("Befehl: intern %s", a.ziel)
+    try:
+        antwort = INTERN[a.ziel]()
+    except Exception as ex:  # noqa: BLE001
+        log.exception("Aktion %s fehlgeschlagen", a.ziel)
+        antwort = textfeld.Antwort(False, f"{a.ziel} ging nicht: {ex}"[:100])
+    if not antwort.ok or a.ziel != "textfeld":
+        melde(antwort.meldung)
+    return antwort
+
+
+def gib_aus(e: Ergebnis, einfuegen: str, leerzeichen_danach: bool, melde=lambda text: None) -> str | None:
+    """Erst e.vorher (z. B. ins Textfeld springen), dann Text einfügen, danach e.aktionen (Enter, Tasten, Öffnen).
+    Scheitert e.vorher, wird nichts eingefügt und nichts gedrückt. Rückgabe: Fehlermeldung oder None."""
+    for a in e.vorher:
+        antwort = _intern(a, melde)
+        if not antwort.ok:
+            if e.text:
+                log.info("Nicht eingefügt: %s", e.text)
+            return antwort.meldung
+        time.sleep(0.05)  # Zielprogramm den Fokuswechsel verarbeiten lassen
     fehler = None
     if e.text:
         fuege_ein(e.text + (" " if leerzeichen_danach and not e.aktionen else ""), einfuegen)
         if e.aktionen:
             time.sleep(0.05)  # Zielprogramm den Text erst verarbeiten lassen
     for a in e.aktionen:
+        if a.art == "intern":
+            antwort = _intern(a, melde)
+            fehler = fehler if antwort.ok else antwort.meldung
+            continue
         log.info("Befehl: %s %s", a.art, a.ziel)
         try:
             if a.art == "taste":
@@ -148,6 +181,9 @@ class App:
         self._entladen = False          # Modell wegen Leerlauf entladen
         self._letzte_aktivitaet = time.monotonic()
         self._laeuft = True
+        # Ausgaben (Text einfügen, Tasten, Öffnen, Textfeld) laufen der Reihe nach in einem eigenen Thread mit COM,
+        # damit UI Automation und os.startfile die Transkription nicht aufhalten
+        self.ausgaben: queue.Queue = queue.Queue()
 
     # --- Modell / Recheneinheit / Mikrofon ---------------------------------------------------
     @property
@@ -479,6 +515,7 @@ class App:
             self._maus_aufnahme = True
             self._letzte_aktivitaet = self._druck_zeit = self._start_zeit = jetzt
             self.recorder.start()
+            self.ausgaben.put(textfeld.vorwaermen)  # Chromium-Bedienungshilfe aufwecken, falls gleich „Textfeld“ kommt
             self.tray.setze("aufnahme", "")
             self._aufwecken()
             return
@@ -504,6 +541,7 @@ class App:
                 return
             self._druck_zeit = self._start_zeit = jetzt
             self.recorder.start()
+            self.ausgaben.put(textfeld.vorwaermen)  # Chromium-Bedienungshilfe aufwecken, falls gleich „Textfeld“ kommt
             self.tray.setze("aufnahme", "")
             self._aufwecken()  # nach Leerlauf: Modell lädt, während gesprochen wird
         elif e == "release":
@@ -619,11 +657,27 @@ class App:
             return
         befehle = lade_befehle()
         ergebnis = zerlege(text, befehle, self.cfg.enter_woerter)
-        fehler = gib_aus(ergebnis, self.cfg.einfuegen, self.cfg.leerzeichen_danach)
         detail = f"Letztes Diktat: {dauer:.1f} s Audio, {sek:.1f} s Whisper"
-        if ergebnis.aktionen:
-            detail += f", Befehl: {', '.join(a.ziel for a in ergebnis.aktionen)}"
-        self.tray.detail = (fehler or befehle.fehler or detail)[:120]
+        if ergebnis.vorher or ergebnis.aktionen:
+            detail += f", Befehl: {', '.join(a.ziel for a in ergebnis.vorher + ergebnis.aktionen)}"
+
+        def ausgabe():
+            fehler = gib_aus(ergebnis, self.cfg.einfuegen, self.cfg.leerzeichen_danach, melde=self.tray.melde)
+            self.tray.detail = (fehler or befehle.fehler or detail)[:120]
+        self.ausgaben.put(ausgabe)
+
+    def _aktions_schleife(self):
+        ctypes.windll.ole32.CoInitializeEx(None, 2)  # COINIT_APARTMENTTHREADED: für UI Automation und startfile
+        while self._laeuft:
+            try:
+                auftrag = self.ausgaben.get(timeout=0.5)
+            except queue.Empty:
+                continue
+            try:
+                auftrag()
+            except Exception as ex:  # noqa: BLE001
+                log.exception("Ausgabe fehlgeschlagen")
+                self.tray.setze("fehler", str(ex)[:100])
 
     def _speichere(self, audio):
         ordner = PROJEKT / "aufnahmen"
@@ -647,7 +701,8 @@ class App:
         self._starte_engine()
         for ziel, name in ((self._ereignis_schleife, "ereignisse"),
                            (self._transkriptions_schleife, "transkription"),
-                           (self._wartungs_schleife, "wartung")):
+                           (self._wartungs_schleife, "wartung"),
+                           (self._aktions_schleife, "aktionen")):
             threading.Thread(target=ziel, name=name, daemon=True).start()
         log.info("Bereit: %s (Bedienung %s, %s, Mikrofon %s, Leerlauf %s min%s)", self.bedien_hinweis(),
                  self.modus, self.beschreibung(), self.aktuelles_mikrofon(), self.cfg.leerlauf_minuten or "aus",
