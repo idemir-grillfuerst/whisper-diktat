@@ -44,14 +44,28 @@ Optionen: `-OhneAutostart`, `-OhneVerknuepfung`, `-NichtStarten`, `-MitTests` (T
 `-Venv <Pfad>` (andere Umgebung), `-Desktop <Ordner>`, `-Uv <Pfad zu uv.exe>`.
 Das Skript darf mehrfach laufen, zum Beispiel nach einem Update. Persönliche Einstellungen bleiben dabei erhalten.
 
+## Ohne GitHub: Installation aus der ZIP-Datei
+
+Wer keinen GitHub-Zugang hat, bekommt eine ZIP-Datei (z. B. `whisper-diktat-v0.8.zip`). Sie enthält dasselbe
+wie das Repo, nur ohne Git:
+
+1. Die ZIP in einen kurzen Pfad entpacken, z. B. `%USERPROFILE%\Desktop\whisper-diktat`. Nicht in einen
+   OneDrive-Ordner, sonst synchronisiert OneDrive Logs und Cache mit.
+2. Im entpackten Ordner wie oben `install.ps1` ausführen.
+
 ## Update
 
+Vorher das Tool beenden: Rechtsklick auf das Symbol → „Beenden“. Dann:
+
+- **Mit Git:** `git pull`
+- **Mit ZIP:** die neue ZIP über den bestehenden Ordner entpacken und vorhandene Dateien ersetzen. Die
+  persönlichen Dateien `config.toml` und `fachwoerter.txt` sind nicht in der ZIP und bleiben erhalten.
+
+Danach erneut ausführen:
+
 ```powershell
-git pull
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
-
-Vorher das Tool beenden: Rechtsklick auf das Symbol → „Beenden“.
 
 ## Deinstallation
 
