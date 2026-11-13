@@ -58,6 +58,22 @@ def test_verknuepfung():
         pruefe("Arbeitsordner = Projektordner", Path(ordner).resolve() == PROJEKT.resolve())
 
 
+def test_pythonw():
+    basis = Path(sys._base_executable).parent
+    pruefe("Subsystem: python.exe = Konsole, pythonw.exe = GUI",
+           einrichten.subsystem(basis / "python.exe") == "Konsole" and einrichten.subsystem(basis / "pythonw.exe") == "GUI")
+    with tempfile.TemporaryDirectory() as d:
+        venv = Path(d)
+        (venv / "Scripts").mkdir()
+        (venv / "pyvenv.cfg").write_text(f"home = {basis}\nversion_info = 3.12\n", encoding="utf-8")
+        import shutil
+        shutil.copyfile(basis / "python.exe", venv / "Scripts" / "pythonw.exe")  # kaputter Starter wie bei uv 0.12
+        pruefe("Konsolen-pythonw.exe wird repariert", einrichten.pythonw_reparieren(venv) == "repariert")
+        pruefe("danach GUI, zweiter Lauf = ok", einrichten.subsystem(venv / "Scripts" / "pythonw.exe") == "GUI"
+               and einrichten.pythonw_reparieren(venv) == "ok")
+    pruefe("pythonw.exe der echten Umgebung ist GUI (kein CMD-Fenster)", einrichten.subsystem(Path(pythonw())) == "GUI")
+
+
 def test_einrichten_ohne_eingriffe():
     vorher = {d: d.read_bytes() for d in VORLAGEN if d.exists()}
     r = subprocess.run([sys.executable, "-m", "diktat.einrichten", "--ohne-modell", "--ohne-verknuepfung",
@@ -82,6 +98,7 @@ if __name__ == "__main__":
     test_vorlagen()
     test_aus_vorlage()
     test_verknuepfung()
+    test_pythonw()
     test_einrichten_ohne_eingriffe()
     test_keine_festen_pfade()
     print("\nALLES OK" if not FEHLER else f"\n{len(FEHLER)} FEHLER: {FEHLER}")

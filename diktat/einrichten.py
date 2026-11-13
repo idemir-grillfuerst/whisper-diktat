@@ -3,6 +3,7 @@
   python -m diktat.einrichten [--ohne-modell] [--ohne-verknuepfung] [--ohne-autostart] [--desktop PFAD]
 
 Schritte:
+  0. pythonw.exe der Umgebung prüfen und ggf. reparieren (sonst öffnet jeder Start ein CMD-Fenster)
   1. config.toml und fachwoerter.txt aus den Vorlagen anlegen (bestehende bleiben unverändert)
   2. Recheneinheiten und Mikrofone anzeigen
   3. Das eingestellte Modell herunterladen (ca. 1–2 GB, nur beim ersten Mal)
@@ -11,6 +12,7 @@ Schritte:
 Am Ende steht „EINRICHTUNG OK“ oder eine Fehlermeldung (Exit-Code 0 bzw. 1).
 """
 import argparse
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -45,6 +47,41 @@ def verknuepfung_anlegen(ziel: Path, pythonw: str, start: Path, ordner: Path) ->
         raise OSError(f"Verknüpfung {ziel} konnte nicht angelegt werden: {r.stderr.strip()}")
 
 
+def subsystem(exe: Path) -> str:
+    """'GUI' (startet ohne Fenster) oder 'Konsole' (öffnet ein Konsolenfenster), aus dem PE-Header der EXE."""
+    kopf = Path(exe).read_bytes()[:4096]
+    pe = int.from_bytes(kopf[0x3C:0x40], "little")
+    return {2: "GUI", 3: "Konsole"}.get(int.from_bytes(kopf[pe + 0x5C:pe + 0x5E], "little"), "?")
+
+
+def pythonw_reparieren(venv: Path | None = None) -> str:
+    """Sorgt dafür, dass Scripts\\pythonw.exe der Umgebung ein echtes Programm ohne Konsolenfenster ist.
+
+    Hintergrund (13.11.2026): uv 0.12 legt in Umgebungen als pythonw.exe denselben Starter wie python.exe an,
+    also ein Konsolenprogramm. Dann öffnet jeder Start über die Verknüpfung oder den Autostart (alle 10 min)
+    kurz ein CMD-Fenster. Schließt man es, stirbt der Wächter. Abhilfe: den GUI-Starter aus der
+    Python-Installation (Lib\\venv\\scripts\\nt\\pythonw.exe) in die Umgebung kopieren.
+    Rückgabe: 'ok', 'repariert' oder eine Fehlermeldung.
+    """
+    venv = Path(venv or sys.prefix)
+    ziel = venv / "Scripts" / "pythonw.exe"
+    if ziel.exists() and subsystem(ziel) == "GUI":
+        return "ok"
+    home = None
+    for zeile in (venv / "pyvenv.cfg").read_text(encoding="utf-8").splitlines():
+        schluessel, _, wert = zeile.partition("=")
+        if schluessel.strip() == "home":
+            home = Path(wert.strip())
+    vorlage = home / "Lib" / "venv" / "scripts" / "nt" / "pythonw.exe" if home else None
+    if not vorlage or not vorlage.exists() or subsystem(vorlage) != "GUI":
+        return f"FEHLER: kein GUI-Starter gefunden ({vorlage})"
+    try:
+        shutil.copyfile(vorlage, ziel)
+    except PermissionError:
+        return "FEHLER: pythonw.exe ist in Benutzung. Tool beenden (Menü „Beenden“) und erneut einrichten."
+    return "repariert" if subsystem(ziel) == "GUI" else "FEHLER: Reparatur hat nicht gewirkt"
+
+
 def modell_laden(repo: str) -> str:
     from huggingface_hub import snapshot_download
     try:
@@ -64,6 +101,12 @@ def main(argv=None) -> int:
 
     from .config import CONFIG_DATEI, lade_config, persoenliche_dateien_anlegen
     from .waechter import pythonw
+
+    print("[0/5] Python-Starter ohne Konsolenfenster")
+    status = pythonw_reparieren()
+    print(f"  {Path(sys.prefix) / 'Scripts' / 'pythonw.exe'}: {status}")
+    if status.startswith("FEHLER"):
+        return 1
 
     print("[1/5] Persönliche Dateien")
     neu = persoenliche_dateien_anlegen()
