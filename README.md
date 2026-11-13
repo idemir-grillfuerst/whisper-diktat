@@ -28,13 +28,13 @@ Entwickelt mit Unterstützung von Claude (Anthropic).
 | | Empfohlen | Mindestens |
 |---|---|---|
 | Betriebssystem | Windows 11 | Windows 10 (64 Bit) |
-| Prozessor/Grafik | Intel Core Ultra mit Arc-Grafik | x86-64-CPU mit AVX2 (Stufe „Notfall“, deutlich langsamer) |
+| Prozessor/Grafik | Intel Core Ultra mit Arc-Grafik | x86-64-CPU mit AVX2 (Recheneinheit CPU, deutlich langsamer) |
 | Arbeitsspeicher | 16 GB | 8 GB |
 | Speicherplatz | ca. 5 GB (Python, Modelle, Cache) | ca. 3 GB (nur ein Modell) |
 | Mikrofon | Headset | eingebautes Mikrofon |
 
-Die Stufen „Schnell“, „Leise“ und „Genau“ nutzen Intels OpenVINO und laufen am besten auf **Intel**-Grafik bzw.
-NPU. Auf Rechnern ohne Intel-Grafik bleibt nur die CPU-Stufe.
+Das Tool nutzt Intels OpenVINO und läuft am besten auf **Intel**-Grafik oder -NPU. Auf Rechnern ohne
+Intel-Grafik bleibt nur die Recheneinheit CPU.
 
 ## Installation
 
@@ -65,7 +65,7 @@ NPU. Auf Rechnern ohne Intel-Grafik bleibt nur die CPU-Stufe.
 |---|---|
 | Strg+Y **halten** | Aufnahme (Symbol rot), beim Loslassen wird transkribiert (gelb) und eingefügt |
 | Strg+Y **kurz tippen** | Daueraufnahme startet, nochmal tippen = fertig |
-| Rechtsklick auf das Symbol | Menü: Pausieren, Modell, Recheneinheit, Mikrofon, Bedienung, Fachwörter, Einstellungen, Log, Autostart, Beenden |
+| Rechtsklick auf das Symbol | Menü: Pausieren, Modell, Recheneinheit, Mikrofon, Bedienung, Fachwörter, Einstellungen, Log, Autostart, Neu starten, Beenden |
 
 Solange das Tool läuft, ist Strg+Y in anderen Programmen nicht als „Wiederholen“ verfügbar. Pausieren gibt
 die Taste frei. Der Shortcut ist in `config.toml` änderbar.
@@ -76,8 +76,8 @@ die Taste frei. Der Shortcut ist in `config.toml` änderbar.
 
 | Modell | Wofür |
 |---|---|
-| Turbo – schnell (large-v3-turbo, int8) | Standard, fast so genau wie Large-v3 |
-| Large-v3 – genau (large-v3, int8) | schwierige Aufnahmen, etwas langsamer |
+| Turbo – schnell (large-v3-turbo, int8) | am schnellsten, fast so genau wie Large-v3 |
+| Large-v3 – genau (large-v3, int8) | voreingestellt, etwas genauer bei schwierigen Aufnahmen, etwas langsamer |
 
 **Recheneinheit:** Im Menü stehen nur die Einheiten, die auf dem Rechner wirklich vorhanden sind, mit Namen.
 
