@@ -109,6 +109,7 @@ class Tray:
             pystray.MenuItem("Bedienung", self._modus_menue()),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Fachwörter bearbeiten …", lambda icon, item: self.a.oeffne_fachwoerter()),
+            pystray.MenuItem("Befehle bearbeiten …", lambda icon, item: self.a.oeffne_befehle()),
             pystray.MenuItem("Einstellungen öffnen …", lambda icon, item: self.a.oeffne_einstellungen()),
             pystray.MenuItem("Log öffnen", lambda icon, item: self.a.oeffne_log()),
             pystray.MenuItem("Mit Windows starten", lambda icon, item: self.a.umschalten_autostart(),

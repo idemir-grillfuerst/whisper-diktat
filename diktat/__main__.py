@@ -22,13 +22,14 @@ import numpy as np
 
 from . import PROJEKT, autostart
 from .waechter import EXIT_LAEUFT_SCHON, EXIT_NEUSTART, EXIT_OK
-from .config import (CONFIG_DATEI, FACHWORT_DATEI, aus_vorlage, fachwort_prompt, lade_config, speichere_modus,
-                     speichere_geraet, speichere_mikrofon, speichere_modell)
+from .config import (BEFEHLE_DATEI, CONFIG_DATEI, FACHWORT_DATEI, aus_vorlage, fachwort_prompt, lade_config,
+                     speichere_modus, speichere_geraet, speichere_mikrofon, speichere_modell)
 from . import geraete
 from .engine import Engine
 from .hotkey import PushToTalk
 from .maus import MausTaste, parse_maustaste
-from .inserter import fuege_ein
+from .befehle import Ergebnis, lade_befehle, zerlege
+from .inserter import druecke, fuege_ein
 from .recorder import RATE, Recorder
 from .tray import Tray
 
@@ -88,6 +89,27 @@ def max_tokens_fuer(dauer_s: float) -> int | None:
 
 def zu_lang(text: str, dauer_s: float) -> bool:
     return len(text) > MAX_ZEICHEN_PRO_S * dauer_s + ZEICHEN_PUFFER
+
+
+def gib_aus(e: Ergebnis, einfuegen: str, leerzeichen_danach: bool) -> str | None:
+    """Text einfügen, danach die Aktionen ausführen (Enter, Tastenkürzel, Öffnen).
+    Rückgabe: Fehlermeldung, falls eine Aktion nicht ging, sonst None."""
+    fehler = None
+    if e.text:
+        fuege_ein(e.text + (" " if leerzeichen_danach and not e.aktionen else ""), einfuegen)
+        if e.aktionen:
+            time.sleep(0.05)  # Zielprogramm den Text erst verarbeiten lassen
+    for a in e.aktionen:
+        log.info("Befehl: %s %s", a.art, a.ziel)
+        try:
+            if a.art == "taste":
+                druecke(a.ziel)
+            else:
+                os.startfile(a.ziel)
+        except (OSError, ValueError) as ex:
+            log.warning("Befehl fehlgeschlagen (%s %s): %s", a.art, a.ziel, ex)
+            fehler = f"Befehl ging nicht: {a.ziel} ({ex})"[:100]
+    return fehler
 
 
 def oeffne_im_editor(pfad) -> None:
@@ -347,6 +369,10 @@ class App:
         aus_vorlage(FACHWORT_DATEI)
         oeffne_im_editor(FACHWORT_DATEI)  # wird bei jedem Diktat neu gelesen
 
+    def oeffne_befehle(self):
+        aus_vorlage(BEFEHLE_DATEI)
+        oeffne_im_editor(BEFEHLE_DATEI)  # wird beim nächsten Diktat neu gelesen
+
     def oeffne_einstellungen(self):
         oeffne_im_editor(CONFIG_DATEI)  # Änderungen greifen nach Neustart
 
@@ -591,10 +617,13 @@ class App:
         if not text:
             self.tray.detail = "Nichts erkannt"
             return
-        if self.cfg.leerzeichen_danach:
-            text += " "
-        fuege_ein(text, self.cfg.einfuegen)
-        self.tray.detail = f"Letztes Diktat: {dauer:.1f} s Audio, {sek:.1f} s Whisper"
+        befehle = lade_befehle()
+        ergebnis = zerlege(text, befehle, self.cfg.enter_woerter)
+        fehler = gib_aus(ergebnis, self.cfg.einfuegen, self.cfg.leerzeichen_danach)
+        detail = f"Letztes Diktat: {dauer:.1f} s Audio, {sek:.1f} s Whisper"
+        if ergebnis.aktionen:
+            detail += f", Befehl: {', '.join(a.ziel for a in ergebnis.aktionen)}"
+        self.tray.detail = (fehler or befehle.fehler or detail)[:120]
 
     def _speichere(self, audio):
         ordner = PROJEKT / "aufnahmen"

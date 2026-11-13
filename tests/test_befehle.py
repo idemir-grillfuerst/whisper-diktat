@@ -124,6 +124,38 @@ def test_druecke():
         inserter._send, inserter.warte_bis_tasten_los = alt
 
 
+def test_gib_aus():
+    import diktat.__main__ as m
+    alt = m.fuege_ein, m.druecke, m.os.startfile
+    log_ = []
+    m.fuege_ein = lambda t, modus: log_.append(("text", t))
+    m.druecke = lambda k: log_.append(("taste", k))
+    m.os.startfile = lambda z: log_.append(("oeffne", z))
+    try:
+        m.gib_aus(Ergebnis("Hallo", [Aktion("taste", "enter")]), "tippen", True)
+        pruefe("kein Leerzeichen vor Enter", log_ == [("text", "Hallo"), ("taste", "enter")])
+        log_.clear()
+        m.gib_aus(Ergebnis("Hallo", []), "tippen", True)
+        pruefe("Leerzeichen ohne Aktion", log_ == [("text", "Hallo ")])
+        log_.clear()
+        m.gib_aus(Ergebnis("Hallo", []), "tippen", False)
+        pruefe("ohne leerzeichen_danach", log_ == [("text", "Hallo")])
+        log_.clear()
+        m.gib_aus(Ergebnis("", [Aktion("oeffne", "https://x/")]), "tippen", True)
+        pruefe("nur öffnen, kein Text", log_ == [("oeffne", "https://x/")])
+
+        def kaputt(z):
+            raise OSError("nicht gefunden")
+        m.os.startfile = kaputt
+        try:
+            m.gib_aus(Ergebnis("", [Aktion("oeffne", "gibtsnicht.exe"), Aktion("taste", "esc")]), "tippen", True)
+            pruefe("Fehler beim Öffnen: weiter mit nächster Aktion", log_[-1] == ("taste", "esc"))
+        except OSError:
+            pruefe("Fehler beim Öffnen: weiter mit nächster Aktion", False)
+    finally:
+        m.fuege_ein, m.druecke, m.os.startfile = alt
+
+
 if __name__ == "__main__":
     test_normalisiere()
     test_parse()
@@ -133,5 +165,6 @@ if __name__ == "__main__":
         test_config_enter(Path(t))
     test_vorlage()
     test_druecke()
+    test_gib_aus()
     print(f"\n{len(FEHLER)} Fehler" + (": " + ", ".join(FEHLER) if FEHLER else ""))
     sys.exit(1 if FEHLER else 0)
