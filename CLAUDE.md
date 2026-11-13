@@ -29,14 +29,16 @@ transkribiert lokal mit Whisper und fügt den Text dort ein, wo der Cursor steht
   - `__main__.py`: App, Threads (Ereignisse, Transkription, Wartung), Bereinigung von Halluzinationen,
     Log in `logs/diktat.log`, harte Abstürze in `logs/absturz.log`. Exit-Codes: 0 = Beenden, 3 = läuft schon, 4 = Neustart
   - `waechter.py`: startet das Tool neu, wenn es abstürzt (max. 5 Abstürze in 10 min), Log in `logs/waechter.log`
-  - `autostart.py`: HKCU\Run an/aus (`python -m diktat.autostart an|aus|status`)
+  - `autostart.py`: Aufgabe „whisper-diktat“ in der Windows-Aufgabenplanung (Anmeldung, Entsperren, alle 10 min),
+    an/aus mit `python -m diktat.autostart an|aus|status`. Der alte HKCU\Run-Eintrag wird dabei entfernt.
+    Aus einer Claude-Sitzung starten: `schtasks /Run /TN whisper-diktat` (läuft dann unabhängig von der App).
 - Normaler Start: `Whisper Diktat starten.lnk` (→ `start.pyw` → Wächter). Zum Entwickeln: `python -m diktat` im Terminal.
 - Aus einer Claude-Sitzung unabhängig starten: `explorer.exe "%USERPROFILE%\Desktop\whisper-diktat\Whisper Diktat starten.lnk"`.
   Ein Start aus einem Terminal-Tab heraus stirbt, sobald der Tab geschlossen wird.
 - Laufende Instanz für ein Update beenden: Menü „Beenden“ (Exit 0, der Wächter endet mit), oder alle python-Prozesse
   hart beenden, deren Befehlszeile `diktat`, `start.pyw` oder `multiprocessing-fork` enthält.
 - `config.toml`: Shortcut, Stufen (Modell + Gerät), Einfügemodus. `fachwoerter.txt`: initial_prompt.
-- `tests/`: `test_kern`, `test_phase2 [--engine]`, `test_phase3`, `test_phase4 [--engine]` (jeweils `python -m tests.<name>`), ohne echte
+- `tests/`: `test_kern`, `test_phase2 [--engine]`, `test_phase3`, `test_phase4 [--engine]`, `test_autostart` (jeweils `python -m tests.<name>`), ohne echte
   Tastatureingaben. Außerdem `mikro_probe` (Stille-Messung am Mikrofon). Achtung: test_phase3 schreibt in `logs/waechter.log`.
 - `whisper-test/`: frühere Experimente und Benchmarks.
 - Keine echten Tastatureingaben (SendInput) in automatischen Tests: Sie landen im aktiven Fenster des Nutzers.

@@ -40,7 +40,7 @@ def main() -> None:
 
     ctypes.windll.kernel32.CreateMutexW(None, False, MUTEX_NAME)
     if ctypes.windll.kernel32.GetLastError() == 183:
-        log.info("Wächter läuft schon – beende mich")
+        # Normalfall beim 10-Minuten-Check der Aufgabenplanung: nicht ins Log schreiben, sonst wächst es unnötig
         return
 
     env = dict(os.environ, DIKTAT_WAECHTER="1")

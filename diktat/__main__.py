@@ -295,7 +295,8 @@ class App:
     # --- Wartung: Standby, Headset-Wechsel, Hook, abgestürzter Whisper-Prozess -----------------
     def _wartungs_schleife(self):
         letzte_wand = time.time()
-        letzte_hook = letzte_geraete = time.monotonic()
+        letzte_hook = letzte_geraete = letztes_lebenszeichen = time.monotonic()
+        gestartet = time.monotonic()
         geraet = self.recorder.standard_geraet()
         while self._laeuft:
             time.sleep(5)
@@ -313,6 +314,13 @@ class App:
                         self._engine_neu_starten("nach Standby")
                     letzte_hook = letzte_geraete = jetzt
                 letzte_wand = jetzt_wand
+                if jetzt - letztes_lebenszeichen >= 3600:
+                    # Damit man im Log sieht, bis wann das Tool lief, falls es einmal spurlos verschwindet
+                    zustand = ("pausiert" if self.pausiert else "Modell entladen" if self._entladen
+                               else "Modell geladen" if self.engine.bereit else "Modell lädt")
+                    log.info("Lebenszeichen: läuft seit %.1f h, %s, Stufe %s, Hook-Ausfälle %d",
+                             (jetzt - gestartet) / 3600, zustand, self.stufe, self.hotkey.hook_ausfaelle)
+                    letztes_lebenszeichen = jetzt
                 if jetzt - letzte_hook > 300:
                     self.hotkey.erneuern()
                     letzte_hook = jetzt
