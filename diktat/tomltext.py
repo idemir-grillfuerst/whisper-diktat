@@ -115,7 +115,9 @@ def _werte(zeilen: list[str], von: int, bis: int):
         i = ende + 1
 
 
-def setze(text: str, abschnitt: str, schluessel: str, wert) -> str:
+def setze(text: str, abschnitt: str, schluessel: str, wert, neuer_schluessel: str | None = None) -> str:
+    """Wert setzen (Zeile ersetzen oder ergänzen). Mit neuer_schluessel wird der Eintrag an Ort und Stelle
+    umbenannt (z. B. Befehl mit geänderten Sätzen)."""
     zeilen = text.splitlines()
     bereich = _abschnitt(zeilen, abschnitt)
     if bereich is None:
@@ -123,20 +125,21 @@ def setze(text: str, abschnitt: str, schluessel: str, wert) -> str:
             zeilen.pop()
         if zeilen:
             zeilen.append("")
-        zeilen += [f"[{abschnitt}]", f"{schluessel_text(schluessel)} = {wert_text(wert)}"]
+        zeilen += [f"[{abschnitt}]", f"{schluessel_text(neuer_schluessel or schluessel)} = {wert_text(wert)}"]
         return "\n".join(zeilen) + "\n"
     kopf, ende = bereich
     letzte = kopf
     for norm, roh, a, b in _werte(zeilen, kopf + 1, ende):
         if norm == schluessel:
             kommentar = _kommentar(zeilen[a]) if a == b else ""
-            zeilen[a:b + 1] = [f"{roh} = {wert_text(wert)}{kommentar}"]
+            name = schluessel_text(neuer_schluessel) if neuer_schluessel is not None else roh
+            zeilen[a:b + 1] = [f"{name} = {wert_text(wert)}{kommentar}"]
             return "\n".join(zeilen) + "\n"
         letzte = b
     if letzte == kopf:  # Abschnitt ohne Werte: hinter Kopf und direkt folgende Kommentare
         while letzte + 1 < ende and zeilen[letzte + 1].lstrip().startswith("#"):
             letzte += 1
-    zeilen.insert(letzte + 1, f"{schluessel_text(schluessel)} = {wert_text(wert)}")
+    zeilen.insert(letzte + 1, f"{schluessel_text(neuer_schluessel or schluessel)} = {wert_text(wert)}")
     return "\n".join(zeilen) + "\n"
 
 

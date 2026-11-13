@@ -98,7 +98,15 @@ def _enter_woerter(befehle) -> list[str]:
 def lade_config(datei=None) -> Config:
     if datei is None:
         aus_vorlage(CONFIG_DATEI)
-    raw = tomllib.loads((datei or CONFIG_DATEI).read_text(encoding="utf-8"))
+    return lade_config_text((datei or CONFIG_DATEI).read_text(encoding="utf-8"))
+
+
+def lade_config_text(text: str) -> Config:
+    """Wie lade_config, aber aus Text (zum Prüfen, bevor das Einstellungsfenster schreibt). ValueError bei Fehlern."""
+    try:
+        raw = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as e:
+        raise ValueError(f"Syntaxfehler: {e}") from None
     a = raw.get("allgemein", {})
     m = raw.get("modell", {})
 
