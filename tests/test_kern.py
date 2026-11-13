@@ -107,6 +107,22 @@ def test_push_to_talk():
         s.runter(LCTRL); s.runter(LSHIFT); s.runter(T)
         pruefe("ctrl+shift+T bricht ab (cancel)", s.events == ["press", "cancel"])
 
+        LWIN = 0x5B
+        pruefe("ctrl+win wird erkannt", parse_shortcut("strg+win") == (frozenset({"ctrl", "win"}), None))
+        for erste, zweite in ((LCTRL, LWIN), (LWIN, LCTRL)):
+            s = Simulator("ctrl+win")
+            masken = []
+            s.ptt._startmenue_unterdruecken = lambda: masken.append(1)
+            pruefe("ctrl+win: Tasten werden durchgelassen", s.runter(erste) is False and s.runter(zweite) is False)
+            s.hoch(zweite); s.hoch(erste)
+            pruefe("ctrl+win: press, release, Startmenü einmal unterdrückt",
+                   s.events == ["press", "release"] and masken == [1])
+        s = Simulator("ctrl+shift")
+        masken = []
+        s.ptt._startmenue_unterdruecken = lambda: masken.append(1)
+        s.runter(LCTRL); s.runter(LSHIFT); s.hoch(LSHIFT); s.hoch(LCTRL)
+        pruefe("ctrl+shift: keine Startmenü-Maske", masken == [])
+
         s = Simulator("ctrl+y")
         s.ptt.eingeschaltet = False
         s.gedrueckt.add(LCTRL)

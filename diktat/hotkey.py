@@ -81,6 +81,21 @@ def parse_shortcut(text: str) -> tuple[frozenset, int | None]:
     return frozenset(mods), key
 
 
+VK_MASKE = 0xE8           # von Windows nicht belegte Taste
+KEYEVENTF_KEYUP = 0x0002
+
+
+def startmenue_unterdruecken() -> None:
+    """Schickt eine unbelegte Taste (Druck + Loslassen), während die Windows-Taste gehalten wird.
+
+    Windows öffnet das Startmenü, wenn die Win-Taste ohne eine weitere Taste losgelassen wird. Bei Shortcuts nur aus
+    Zusatztasten (z. B. Strg+Win) sieht Windows sonst genau das. Die Maske zählt als „weitere Taste“, Programme
+    ignorieren sie (gleiche Technik wie AutoHotkey). Unser eigener Hook ignoriert sie, weil sie injiziert ist.
+    """
+    user32.keybd_event(VK_MASKE, 0, 0, 0)
+    user32.keybd_event(VK_MASKE, 0, KEYEVENTF_KEYUP, 0)
+
+
 def _gedrueckt(vk: int) -> bool:
     return bool(user32.GetAsyncKeyState(vk) & 0x8000)
 
@@ -105,6 +120,7 @@ class PushToTalk:
         self._thread_id = None
         self._hook = None
         self._proc = HOOKPROC(self._hook_proc)  # Referenz halten, sonst räumt Python sie weg
+        self._startmenue_unterdruecken = startmenue_unterdruecken  # in Tests austauschbar
 
     # --- Hook-Callback: muss schnell sein -------------------------------------------------
     def _hook_proc(self, n_code, w_param, l_param):
@@ -163,6 +179,8 @@ class PushToTalk:
             if unten and not self.aktiv:
                 if gedrueckte_modifier(ausser_vk=vk) | {gruppe} == set(self.mods):
                     self.aktiv = True
+                    if "win" in self.mods:
+                        self._startmenue_unterdruecken()
                     self._melde("press")
             elif not unten and self.aktiv and gruppe in self.mods:
                 self.aktiv = False
