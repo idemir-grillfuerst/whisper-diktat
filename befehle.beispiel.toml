@@ -7,6 +7,7 @@
 # [oeffnen]  Name = Webadresse, Programm oder Ordner (shell:Downloads …). Webadressen öffnen im Standardbrowser.
 #            Jeder Name funktioniert in diesen Sätzen: „öffne X“, „X öffnen“, „öffne mal X“, „mach X auf“,
 #            „X aufmachen“, „starte X“, „X starten“, „geh zu X“, „zeig X“, „zeig mir X“.
+# [aktionen] Eingebaute Aktionen (Textfeld), siehe unten.
 # [tasten]   Satz = Tasten wie beim Shortcut (ctrl, shift, alt, win, a–z, 0–9, f1–f12, enter, esc, tab, space,
 #            backspace, entf, left, right, up, down, home, end, pageup, pagedown, .).
 #            Mehrere Kombinationen nacheinander mit Leerzeichen: "shift+enter shift+enter".
@@ -65,3 +66,12 @@
 "zeile löschen"                     = "home shift+end backspace"
 "nach oben|ganz nach oben"          = "ctrl+home"
 "nach unten|ganz nach unten"        = "ctrl+end"
+
+[aktionen]
+# Eingebaute Aktionen: Satz = textfeld | textfeld_merken | textfeld_vergessen
+# „Textfeld“ setzt den Cursor ins Eingabefeld des Fensters vorne (Claude, Teams, Browser …). Auch am Anfang eines
+# Diktats: „Textfeld, Hallo Manuel. Senden.“ = ins Feld, Text einfügen, absenden.
+# Falsches Feld erwischt? Maus auf das richtige Feld, „merke Textfeld“ sagen. „vergiss Textfeld“ löscht das wieder.
+"textfeld|eingabefeld|ins textfeld|zum textfeld|chatfeld|schreibfeld" = "textfeld"
+"merke textfeld|textfeld merken|merk dir das textfeld"               = "textfeld_merken"
+"vergiss textfeld|textfeld vergessen"                                = "textfeld_vergessen"

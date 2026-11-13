@@ -19,24 +19,29 @@ SATZZEICHEN = ".,!?;:\"'„“”‚‘’»«()-–—…"
 OEFFNEN_FORMEN = ("öffne {}", "{} öffnen", "öffne mal {}", "mach {} auf", "{} aufmachen",
                   "starte {}", "{} starten", "geh zu {}", "zeig {}", "zeig mir {}")
 LETZTES_WORT = re.compile(r"\S+\s*$")
+# Eingebaute Aktionen für [aktionen]; nur "textfeld" darf auch als Vorsilbe vor einem Text stehen
+INTERNE_AKTIONEN = ("textfeld", "textfeld_merken", "textfeld_vergessen")
+VORSILBEN_AKTIONEN = ("textfeld",)
 
 
 @dataclass(frozen=True)
 class Aktion:
-    art: str   # "taste" | "oeffne"
+    art: str   # "taste" | "oeffne" | "intern"
     ziel: str  # z. B. "ctrl+z" oder "https://…"
 
 
 @dataclass
 class Ergebnis:
     text: str
-    aktionen: list[Aktion] = field(default_factory=list)
+    aktionen: list[Aktion] = field(default_factory=list)  # nach dem Text
+    vorher: list[Aktion] = field(default_factory=list)    # vor dem Text (z. B. ins Textfeld springen)
 
 
 @dataclass
 class Befehle:
     saetze: dict[str, Aktion]  # normalisierter Satz -> Aktion
     fehler: str | None = None
+    vorsilben: dict[str, Aktion] = field(default_factory=dict)  # normalisierter Satz -> Aktion, auch am Anfang
 
 
 def normalisiere(text: str) -> str:
@@ -72,7 +77,8 @@ def parse_befehle(toml_text: str) -> Befehle:
     def neu(satz: str, aktion: Aktion):
         saetze.setdefault(satz, aktion)  # bei doppelten Sätzen gewinnt der erste
 
-    for abschnitt in ("oeffnen", "tasten"):
+    vorsilben: dict[str, Aktion] = {}
+    for abschnitt in ("oeffnen", "tasten", "aktionen"):
         eintraege = raw.get(abschnitt, {})
         if not isinstance(eintraege, dict):
             raise ValueError(f"[{abschnitt}] muss ein Abschnitt sein")
@@ -84,11 +90,19 @@ def parse_befehle(toml_text: str) -> Befehle:
                 for name in _namen(schluessel):
                     for form in OEFFNEN_FORMEN:
                         neu(form.format(name), Aktion("oeffne", ziel))
-            else:
+            elif abschnitt == "tasten":
                 pruefe_tasten(ziel)
                 for satz in _namen(schluessel):
                     neu(satz, Aktion("taste", ziel))
-    return Befehle(saetze)
+            else:
+                if ziel not in INTERNE_AKTIONEN:
+                    raise ValueError(f"[aktionen] \"{schluessel}\": unbekannte Aktion '{ziel}' "
+                                     f"(möglich: {', '.join(INTERNE_AKTIONEN)})")
+                for satz in _namen(schluessel):
+                    neu(satz, Aktion("intern", ziel))
+                    if ziel in VORSILBEN_AKTIONEN:
+                        vorsilben.setdefault(satz, Aktion("intern", ziel))
+    return Befehle(saetze, vorsilben=vorsilben)
 
 
 _CACHE: dict[Path, tuple[float, Befehle]] = {}
@@ -120,12 +134,33 @@ def lade_befehle(datei: Path | None = None) -> Befehle:
     return befehle
 
 
-def zerlege(text: str, befehle: Befehle, enter_woerter: list[str]) -> Ergebnis:
-    aktion = befehle.saetze.get(normalisiere(text))
-    if aktion is not None:
-        return Ergebnis("", [aktion])
+def _vorsilbe(text: str, befehle: Befehle) -> tuple[Aktion, str] | None:
+    """„Textfeld, Hallo“ -> (Aktion textfeld, "Hallo"). Längste passende Vorsilbe gewinnt, danach muss Text folgen."""
+    tokens = text.split()
+    for satz in sorted(befehle.vorsilben, key=lambda v: len(v.split()), reverse=True):
+        k = len(satz.split())
+        if len(tokens) > k and normalisiere(" ".join(tokens[:k])) == satz:
+            rest = " ".join(tokens[k:]).lstrip(",;:-–— ")
+            if normalisiere(rest):
+                return befehle.vorsilben[satz], rest
+    return None
+
+
+def _enter_am_ende(text: str, enter_woerter: list[str]) -> Ergebnis:
     m = LETZTES_WORT.search(text)
     if m and enter_woerter and normalisiere(m.group()) in {normalisiere(w) for w in enter_woerter}:
         rest = text[:m.start()].rstrip().rstrip(",;:-–—").rstrip()
         return Ergebnis(rest, [Aktion("taste", "enter")])
     return Ergebnis(text, [])
+
+
+def zerlege(text: str, befehle: Befehle, enter_woerter: list[str]) -> Ergebnis:
+    aktion = befehle.saetze.get(normalisiere(text))
+    if aktion is not None:
+        return Ergebnis("", [aktion])
+    vs = _vorsilbe(text, befehle)
+    if vs is not None:  # auf den Rest nur die Senden/Enter-Regel, keine weiteren Befehle
+        e = _enter_am_ende(vs[1], enter_woerter)
+        e.vorher = [vs[0]]
+        return e
+    return _enter_am_ende(text, enter_woerter)

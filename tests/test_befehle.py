@@ -73,6 +73,28 @@ def test_zerlege():
     pruefe("Senden mitten im Satz", zerlege("Senden wir das morgen", b, ["enter", "senden"]).aktionen == [])
 
 
+AKT = '[aktionen]\n"textfeld|ins textfeld" = "textfeld"\n"merke textfeld" = "textfeld_merken"\n'
+
+
+def test_aktionen():
+    b = parse_befehle(AKT)
+    TF = Aktion("intern", "textfeld")
+    pruefe("Aktion: ganzer Satz", zerlege("Textfeld.", b, ["senden"]) == Ergebnis("", [TF]))
+    pruefe("Aktion: merke", zerlege("Merke Textfeld!", b, ["senden"]).aktionen == [Aktion("intern", "textfeld_merken")])
+    pruefe("Vorsilbe + Senden", zerlege("Textfeld, Hallo Manuel. Senden.", b, ["senden"])
+           == Ergebnis("Hallo Manuel.", [Aktion("taste", "enter")], vorher=[TF]))
+    pruefe("längste Vorsilbe", zerlege("Ins Textfeld: Hallo", b, ["senden"]) == Ergebnis("Hallo", [], vorher=[TF]))
+    pruefe("Rest ohne weitere Befehle", zerlege("Textfeld, rückgängig", parse_befehle(AKT + BEISPIEL), ["senden"])
+           == Ergebnis("rückgängig", [], vorher=[TF]))
+    pruefe("Textfeld mitten im Satz = Text", zerlege("Das Textfeld ist leer", b, ["senden"]).vorher == [])
+    pruefe("merke nicht als Vorsilbe", zerlege("Merke Textfeld bitte", b, ["senden"]).vorher == [])
+    try:
+        parse_befehle('[aktionen]\n"x" = "gibtsnicht"')
+        pruefe("unbekannte Aktion abgelehnt", False)
+    except ValueError:
+        pruefe("unbekannte Aktion abgelehnt", True)
+
+
 def test_laden(tmp):
     d = tmp / "befehle.toml"
     d.write_text('[tasten]\n"rückgängig" = "ctrl+z"\n', encoding="utf-8")
@@ -100,6 +122,8 @@ def test_vorlage():
     pruefe("Outlook im Browser", b.saetze["öffne outlook"].ziel.startswith("https://outlook."))
     pruefe("rückgängig", b.saetze["rückgängig"] == Aktion("taste", "ctrl+z"))
     pruefe("Emoji-Taste win+.", b.saetze["emoji"] == Aktion("taste", "win+."))
+    pruefe("Vorlage: textfeld", b.saetze.get("textfeld") == Aktion("intern", "textfeld"))
+    pruefe("Vorlage: vergiss textfeld", "vergiss textfeld" in b.saetze)
     for satz, taste in (("copy", "ctrl+c"), ("paste", "ctrl+v"), ("cut", "ctrl+x"), ("undo", "ctrl+z"),
                         ("strg c", "ctrl+c"), ("strg v", "ctrl+v"), ("select all", "ctrl+a")):
         pruefe(f"Einzelwort {satz}", b.saetze.get(satz) == Aktion("taste", taste))
@@ -181,6 +205,7 @@ if __name__ == "__main__":
     test_normalisiere()
     test_parse()
     test_zerlege()
+    test_aktionen()
     with tempfile.TemporaryDirectory() as t:
         test_laden(Path(t))
         test_config_enter(Path(t))
