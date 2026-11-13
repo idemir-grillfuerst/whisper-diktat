@@ -46,6 +46,13 @@ Rechner nie.
   - `autostart.py`: Aufgabe „whisper-diktat“ in der Windows-Aufgabenplanung (Anmeldung, Entsperren, alle 10 min),
     an/aus mit `python -m diktat.autostart an|aus|status`. Der alte HKCU\Run-Eintrag wird dabei entfernt.
   - `geraete.py`: vorhandene Recheneinheiten (OpenVINO `available_devices`) und Mikrofone (MME, Namen statt Nummern)
+  - `tomltext.py`: TOML zeilenweise ändern (setze/entferne/eintraege), Kommentare bleiben. Von config, textfeld
+    und dem Einstellungsfenster genutzt.
+  - `einstellungen/`: Einstellungsfenster (Tkinter + sv-ttk, eigener Prozess `python -m diktat.einstellungen
+    [--reiter Name]`). `daten.py` = reine Logik (Felder mit Erklärungen, prüfen, schreiben, Befehle als Liste),
+    je Reiter ein Modul, `dialoge.py` (Tasten wählen ohne eigenen Hook, Befehl bearbeiten). Das Tool überwacht
+    `config.toml` (alle 2 s) und übernimmt live; ↻-Felder (shortcut, maustaste, mikrofon_offen_halten) per
+    Neustart-Ereignis `Local\whisper-diktat-neustart`. Tk nur im Tk-Thread (`Reiter.im_hintergrund`).
   - `config.py`: lädt `config.toml`/`fachwoerter.txt`/`befehle.toml`, legt sie beim ersten Zugriff aus den Vorlagen an
   - `einrichten.py`: Einrichtung nach der Paketinstallation (Dateien, Geräte, Modell, Verknüpfungen, Autostart)
 - `docs/SPRACHBEFEHLE.md`: Anleitung für Nutzer (Befehle, eigene Einträge). Bei neuen Befehlen mitpflegen.
@@ -53,7 +60,7 @@ Rechner nie.
 - `start.pyw` → Wächter → Tool. Die Verknüpfung `Whisper Diktat starten.lnk` legt `einrichten.py` an.
 - `config.toml`: Shortcut, `[modell] name` (turbo/large-v3) + `geraet` (auto/GPU/NPU/CPU), `mikrofon` ("" = Windows-
   Standard), Einfügemodus. Alte Dateien mit `[modell] stufe` werden beim Laden übersetzt. `fachwoerter.txt`: initial_prompt.
-- `tests/`: `test_kern`, `test_befehle`, `test_textfeld`, `test_phase2 [--engine]`, `test_phase3`,
+- `tests/`: `test_kern`, `test_befehle`, `test_textfeld`, `test_einstellungen`, `test_phase2 [--engine]`, `test_phase3`,
   `test_phase4 [--engine]`, `test_autostart`, `test_geraete`, `test_einrichten` (jeweils `python -m tests.<name>`), ohne echte Tastatureingaben. Außerdem
   `mikro_probe` (Stille-Messung am Mikrofon) und `textfeld_probe [--prozess name]` (welche Eingabefelder das
   Tool in einem Fenster sieht, nur lesend). Achtung: test_phase3 schreibt in `logs/waechter.log`.

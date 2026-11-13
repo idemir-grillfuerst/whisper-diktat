@@ -43,6 +43,9 @@ rechts in der Taskleiste erscheint ein Mikrofon-Symbol. Danach: **Strg+Y halten,
 Optionen: `-OhneAutostart`, `-OhneVerknuepfung`, `-NichtStarten`, `-MitTests` (Testpakete),
 `-Venv <Pfad>` (andere Umgebung), `-Desktop <Ordner>`, `-Uv <Pfad zu uv.exe>`.
 Das Skript darf mehrfach laufen, zum Beispiel nach einem Update. Persönliche Einstellungen bleiben dabei erhalten.
+Es installiert dabei auch neue Pakete (z. B. `comtypes` für „Textfeld“, `sv-ttk` für das Einstellungsfenster).
+
+Nach der Installation: Klick auf das Symbol in der Taskleiste öffnet die Einstellungen.
 
 ## Ohne GitHub: Installation aus der ZIP-Datei
 

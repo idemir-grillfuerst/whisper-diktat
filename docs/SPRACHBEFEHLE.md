@@ -67,32 +67,33 @@ eigenen Einträge.
 - Gemerkte Felder stehen in `textfelder.toml` (Projektordner). Dort kann man auch von Hand eine Taste oder
   Klickposition hinterlegen, siehe Kommentare in der Datei.
 
-## Eigene Befehle
-Rechtsklick auf das Symbol → **„Befehle bearbeiten …“** öffnet `befehle.toml`. Änderungen gelten ab dem nächsten
-Diktat, ohne Neustart. Mehrere Schreibweisen mit `|` trennen.
+## Einstellungen und eigene Befehle
+Klick auf das Symbol in der Taskleiste (oder Rechtsklick → **„Einstellungen …“**) öffnet das Einstellungsfenster:
 
-```toml
-[oeffnen]
-"lieferantenportal|portal" = "https://..."          # Webseite (öffnet im Standardbrowser)
-"claude" = "shell:AppsFolder\\Claude_pzs8sxrjxfjjc!Claude"   # installierte App
+| Reiter | Was du dort machst |
+|---|---|
+| Allgemein | Tastenkombination, Bedienung, Maustaste, Einfügen, **Wörter zum Absenden**, Autostart |
+| Mikrofon | Mikrofon wählen, **Pegeltest** („hört mich das Mikrofon?“), Mikrofon offen halten |
+| Modell | Turbo oder Large-v3, Grafik/NPU/Prozessor, Sprache |
+| Befehle | alle Sprachbefehle als Tabelle: suchen, **Neu**, **Ändern** (Doppelklick), **Löschen** |
+| Textfelder | gemerkte Textfelder ansehen und löschen |
+| Fachwörter | Begriffe, die Whisper richtig schreiben soll |
+| Info | Version, Anleitung, Log, Projektordner |
 
-[tasten]
-"fett" = "ctrl+b"
-"neuer absatz" = "shift+enter shift+enter"          # mehrere Tasten nacheinander
-```
+- Jede Option ist im Fenster erklärt. Was erst nach einem Neustart greift, ist mit „↻“ markiert; das Fenster bietet
+  den Neustart dann selbst an. Alles andere übernimmt das Tool in wenigen Sekunden.
+- **Neuer Befehl:** Reiter Befehle → „Neu …“ → wählen, was passieren soll (etwas öffnen, Tasten drücken,
+  eingebaute Aktion), Sätze eintragen (eine Zeile je Variante). Tasten musst du nicht tippen: „Taste wählen …“
+  nimmt sie auf oder du klickst sie zusammen. Programme und Ordner gehen über „Programm wählen …“ / „Ordner
+  wählen …“, mit „Testen“ probierst du es direkt aus.
+- Befehle werden sofort gespeichert, die übrigen Reiter mit „Übernehmen“ oder „OK“.
 
-Ist die Datei fehlerhaft, zeigt das Symbol-Menü den Fehler an. Diktieren geht trotzdem weiter, nur die Befehle sind
-dann aus.
-
-Die Wörter für „Absenden“ stehen in `config.toml`:
-
-```toml
-[befehle]
-enter = ["enter", "senden"]   # [] = aus
-```
+Für Fortgeschrittene stehen alle Einstellungen weiter in Textdateien im Projektordner (`config.toml`,
+`befehle.toml`, `textfelder.toml`, `fachwoerter.txt`, Reiter Info → „Dateien von Hand bearbeiten …“). Das Fenster
+lässt Kommentare darin stehen. Ist eine Datei fehlerhaft, läuft das Diktieren weiter; das Symbol meldet den Fehler.
 
 ## Tipps
 - Kurze Einzelwörter wie „Zurück.“ oder „Tab.“ lösen immer den Befehl aus. Willst du so ein Wort als Text,
-  diktiere einen ganzen Satz oder nimm den Eintrag aus `befehle.toml`.
-- Erkennt Whisper ein Wort bei dir anders (z. B. „Enta“), trag die Schreibweise als weitere Variante ein.
+  diktiere einen ganzen Satz oder lösch den Befehl im Einstellungsfenster (Reiter Befehle).
+- Erkennt Whisper ein Wort bei dir anders (z. B. „Enta“), trag die Schreibweise im Reiter Befehle als weiteren Satz ein (bei „Senden“: Reiter Allgemein).
 - Was ausgeführt wurde, steht im Log (Menü „Log öffnen“), Zeilen „Befehl: …“.
