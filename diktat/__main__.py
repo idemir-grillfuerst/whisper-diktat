@@ -40,6 +40,7 @@ LOG_DATEI = PROJEKT / "logs" / "diktat.log"
 
 # Einstellungsfenster (python -m diktat.einstellungen) und Tool verständigen sich über diese Namen
 NEUSTART_EREIGNIS = "Local\\whisper-diktat-neustart"
+STUMM_MELDUNG_S = 30  # Windows-Meldung bei stummer Aufnahme höchstens so oft (Sekunden)
 NEUSTART_FELDER = ("shortcut", "maustaste", "mikrofon_offen_halten")  # greifen erst nach einem Neustart
 
 # Typische Whisper-Halluzinationen bei Stille oder am Ende (aus Untertitel-Trainingsdaten)
@@ -696,6 +697,21 @@ class App:
                 self._letzte_aktivitaet = time.monotonic()
             self._zurueck_zu_bereit()
 
+    def _stumm_melden(self, spitze: float):
+        """Sichtbare Windows-Meldung bei stummer Aufnahme (sonst merkt man nur, dass nichts passiert).
+        Höchstens alle STUMM_MELDUNG_S Sekunden, damit wiederholtes Probieren nicht zumüllt."""
+        jetzt = time.monotonic()
+        if jetzt - getattr(self, "_stumm_gemeldet", -STUMM_MELDUNG_S) < STUMM_MELDUNG_S:
+            return
+        self._stumm_gemeldet = jetzt
+        geraet = self.recorder.geraet or "Windows-Standard"
+        if spitze < 0.001:  # digitale Stille: Mikrofon liefert gar nichts
+            text = (f"Mikrofon ist stumm: {geraet}. Stummtaste am Headset prüfen oder in den Einstellungen "
+                    "(Reiter Mikrofon) ein anderes Mikrofon wählen.")
+        else:
+            text = f"Zu leise, nichts verstanden ({geraet}). Näher ans Mikrofon oder lauter sprechen."
+        self.tray.melde(text)
+
     def _verarbeite(self, audio: np.ndarray):
         dauer = len(audio) / RATE
         spitze = float(np.abs(audio).max()) if len(audio) else 0.0
@@ -705,6 +721,7 @@ class App:
             log.info("Aufnahme stumm (%.1f s, Spitze %.4f, Gerät %s) – Mikrofon stummgeschaltet oder "
                      "Headset wacht gerade auf?", dauer, spitze, self.recorder.geraet)
             self.tray.detail = "Aufnahme war stumm – nochmal versuchen / Mikrofon prüfen"
+            self._stumm_melden(spitze)
             return
         self._aufwecken()  # Sicherheitsnetz, falls das Modell im Leerlauf entladen ist
         # Falls das Modell noch lädt (Start, Stufenwechsel, Leerlauf): warten statt verwerfen

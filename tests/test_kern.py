@@ -207,6 +207,27 @@ def test_inserter_strukturen():
            ctypes.sizeof(INPUT) == (40 if ctypes.sizeof(ctypes.c_void_p) == 8 else 28))
 
 
+def test_stumm_meldung():
+    """Stumme Aufnahme: sichtbare Windows-Meldung (höchstens alle 30 s), nichts eingefügt."""
+    import types
+    import numpy as np
+    import diktat.__main__ as hm
+    gemeldet = []
+    app = hm.App.__new__(hm.App)
+    app.cfg = types.SimpleNamespace(aufnahmen_speichern=False)
+    app.recorder = types.SimpleNamespace(geraet="Kopfhörermikrofon (Yealink WH64")
+    app.tray = types.SimpleNamespace(detail="", melde=gemeldet.append)
+    app._verarbeite(np.zeros(16000, dtype=np.float32))
+    pruefe("Stumm: Windows-Meldung mit Gerätename", len(gemeldet) == 1 and "Yealink WH64" in gemeldet[0]
+           and "stumm" in gemeldet[0].lower())
+    app._verarbeite(np.zeros(16000, dtype=np.float32))
+    pruefe("Stumm: nicht öfter als alle 30 s", len(gemeldet) == 1)
+    app._stumm_gemeldet = 0.0
+    leise = np.full(16000, 0.005, dtype=np.float32)
+    app._verarbeite(leise)
+    pruefe("Stumm: leise ist etwas anderes als gar nichts", len(gemeldet) == 2 and "leise" in gemeldet[1].lower())
+
+
 def test_engine():
     import time
     from faster_whisper.audio import decode_audio
@@ -233,6 +254,7 @@ if __name__ == "__main__":
     test_bereinigen()
     test_config()
     test_inserter_strukturen()
+    test_stumm_meldung()
     if "--engine" in sys.argv:
         test_engine()
     print(f"\n{len(FEHLER)} Fehler" + (": " + ", ".join(FEHLER) if FEHLER else ""))
