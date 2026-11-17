@@ -7,7 +7,8 @@ Die Spracherkennung läuft mit [OpenAI Whisper](https://github.com/openai/whispe
 Rechner**. Die Aufnahme verlässt den Laptop nie, es gibt keine Cloud und keine Kosten pro Minute.
 
 **Autor:** Ismail Demir  
-Entwickelt mit Unterstützung von Claude (Anthropic).
+Entwickelt mit Unterstützung von Claude (Anthropic).  
+**Lizenz:** MIT, siehe [LICENSE](LICENSE).
 
 ---
 
@@ -164,12 +165,14 @@ tests/             Tests (python -m tests.test_kern usw.), ohne echte Tastaturei
 | faster-whisper (nur Tests/Benchmarks) | MIT |
 | sounddevice | MIT |
 | pystray | LGPL-3.0 |
+| sv-ttk | MIT |
+| comtypes | MIT |
 | Pillow | MIT-CMU (HPND) |
 | huggingface_hub, NumPy | Apache 2.0 / BSD |
 
 ## Weitergabe an Kollegen
 
-1. Repo freigeben (GitHub: Settings → Collaborators) oder als ZIP weitergeben.
+1. Link auf das Repo schicken (oder ZIP weitergeben, siehe [INSTALL.md](INSTALL.md)).
 2. Der Kollege führt `install.ps1` aus oder lässt Claude Code das nach [INSTALL.md](INSTALL.md) erledigen.
 3. **Freigabe durch die IT** wegen des Virenscanners (siehe Fehlersuche) vorher klären.
 

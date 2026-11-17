@@ -49,7 +49,7 @@ Nach der Installation: Klick auf das Symbol in der Taskleiste öffnet die Einste
 
 ## Ohne GitHub: Installation aus der ZIP-Datei
 
-Wer keinen GitHub-Zugang hat, bekommt eine ZIP-Datei (z. B. `whisper-diktat-v0.8.zip`). Sie enthält dasselbe
+Ohne Git geht es mit einer ZIP-Datei (auf GitHub unter „Releases“ oder „Code → Download ZIP“, oder weitergegeben). Sie enthält dasselbe
 wie das Repo, nur ohne Git:
 
 1. Die ZIP in einen kurzen Pfad entpacken, z. B. `%USERPROFILE%\Desktop\whisper-diktat`. Nicht in einen

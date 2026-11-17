@@ -1,6 +1,6 @@
 """Sprachbefehl „Textfeld“: Cursor ins Eingabefeld des Fensters vorne setzen.
 
-Reihenfolge (siehe docs/superpowers/specs/2026-11-13-textfeld-design.md):
+Reihenfolge:
   1. Regel aus textfelder.toml für Programm bzw. Browser+Domain (Feldmerkmale, Taste oder Klickposition)
   2. automatische Suche über die Windows-Bedienungshilfe (UI Automation, Modul uia)
   3. gemerkte Klickposition (über „merke Textfeld“, wenn unter der Maus kein Feld erkennbar war)

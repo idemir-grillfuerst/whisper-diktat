@@ -23,3 +23,5 @@ MEMORY.md
 PLAN.md
 whisper-test/
 .claude/settings.local.json
+# Planungsnotizen der Entwicklung (Specs/Pläne mit internen Details)
+docs/superpowers/
